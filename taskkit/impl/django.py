@@ -1,0 +1,294 @@
+import sys
+import time
+from typing import Generator, Any
+
+from django.db.transaction import atomic, Atomic
+from django.db.utils import OperationalError, IntegrityError
+
+from ..backend import Backend, Lock, NotFound, NoResult, Failed
+from ..contrib.django.models import TaskkitControlEvent, TaskkitLock, TaskkitWorker, TaskkitTask, TaskkitSchedulerState
+from ..controller import Controller, ControlEvent, encode_control_event, decode_control_event
+from ..kit import Kit
+from ..stage import StageInfo
+from ..task import Task, TaskEncoder, TaskHandler
+from ..utils import cur_ts
+
+
+class DjangoController(Controller):
+    def receive_events(self) -> Generator[ControlEvent, None, None]:
+        offset = cur_ts()
+        while True:
+            for event in TaskkitControlEvent.objects\
+                    .filter(sent__gt=offset)\
+                    .order_by('sent'):
+                offset = event.sent
+                if (e := decode_control_event(event.data)):
+                    yield e
+            time.sleep(1)
+
+    def send_event(self, event: ControlEvent):
+        TaskkitControlEvent.objects.create(
+            data=encode_control_event(event),
+            sent=cur_ts())
+
+
+class DjangoLock(Lock):
+    def __init__(self, target: str):
+        self.target = target
+        self.acquired = False
+        self.ensured = False
+        self.atomic: Atomic | None = None
+
+    def acquire(self) -> bool:
+        if self.acquired:
+            return True
+
+        if not self.ensured:
+            self.ensured = True
+            try:
+                with atomic():
+                    TaskkitLock.objects\
+                        .select_for_update(nowait=True)\
+                        .get(pk=self.target)
+            except TaskkitLock.DoesNotExist:
+                try:
+                    TaskkitLock.objects.create(pk=self.target)
+                except IntegrityError:
+                    pass
+            except Exception:
+                pass
+
+        self.atomic = atomic()
+        self.atomic.__enter__()
+        try:
+            TaskkitLock.objects\
+                .select_for_update(nowait=True)\
+                .get(pk=self.target)
+            self.acquired = True
+            return True
+        except Exception:
+            self.atomic.__exit__(*sys.exc_info())
+            self.atomic = None
+            return False
+
+    def release(self):
+        if self.atomic:
+            self.atomic.__exit__(*sys.exc_info())
+            self.atomic = None
+            self.acquired = False
+
+
+class DjangoBackend(Backend):
+    def __init__(self, encoder: TaskEncoder):
+        self.encoder = encoder
+
+    def set_worker_ttl(self, worker_ids: set[str], expires_at: float):
+        if not worker_ids:
+            return
+        workers = [
+            TaskkitWorker(pk=wid, expires=expires_at)
+            for wid in worker_ids
+        ]
+        TaskkitWorker.objects.bulk_create(workers, ignore_conflicts=True)
+        TaskkitWorker.objects.bulk_update(workers, ['expires'])
+
+    def get_workers(self) -> list[tuple[str, float]]:
+        return [
+            (w.pk, w.expires)
+            for w in TaskkitWorker.objects.order_by('expires')
+        ]
+
+    def purge_workers(self, worker_ids: set[str]):
+        if not worker_ids:
+            return
+        TaskkitWorker.objects.filter(pk__in=worker_ids).delete()
+
+    def put_tasks(self, *tasks: Task):
+        if not tasks:
+            return
+        objects = [
+            TaskkitTask(
+                id=t.id,
+                group=t.group,
+                name=t.name,
+                data=self.encoder.encode_data(t.group, t.name, t.data),
+                due=t.due,
+                created=t.created,
+                scheduled=t.scheduled,
+                retry_count=t.retry_count,
+                ttl=t.ttl,
+                assignee_worker_id=None,
+                began=None,
+                result=None,
+                done=None,
+                disposable=None,
+            )
+            for t in tasks
+        ]
+        with atomic():
+            self.discard_tasks(*[t.pk for t in objects])
+            TaskkitTask.objects.bulk_create(objects, ignore_conflicts=True)
+
+    def get_queued_tasks(self, group: str, limit: int) -> list[Task]:
+        return [
+            self._db_to_task(t) for t in TaskkitTask.objects
+            .filter(began__isnull=True, group=group)
+            .order_by('due')[:limit]
+        ]
+
+    def lookup_tasks(self, *task_ids: str) -> dict[str, Task | None]:
+        tasks = {
+            t.pk: self._db_to_task(t)
+            for t in TaskkitTask.objects.filter(pk__in=task_ids)
+        }
+        return {tid: tasks.get(tid) for tid in task_ids}
+
+    def assign_task(self, group: str, worker_id: str) -> Task | None:
+        for pk in TaskkitTask.objects\
+                .filter(began__isnull=True, group=group, due__lt=cur_ts())\
+                .values_list('pk', flat=True)\
+                .order_by('due')[:50]:
+            with atomic():
+                try:
+                    db_task = TaskkitTask.objects\
+                        .select_for_update(nowait=True)\
+                        .get(pk=pk)
+                    db_task.assignee_worker_id = worker_id
+                    db_task.began = cur_ts()
+                    db_task.save()
+                    return self._db_to_task(db_task)
+                except (OperationalError, TaskkitTask.DoesNotExist):
+                    pass
+        return None
+
+    def discard_tasks(self, *task_ids: str):
+        TaskkitTask.objects.filter(pk__in=task_ids).delete()
+
+    def succeed(self, task: Task, result: Any):
+        with atomic():
+            try:
+                db_task = TaskkitTask.objects\
+                    .select_for_update()\
+                    .get(pk=task.id)
+                db_task.done = cur_ts()
+                db_task.began = db_task.began or db_task.done
+                db_task.result = self.encoder.encode_result(
+                    task.group, task.name, result)
+                db_task.disposable = db_task.done + task.ttl
+                db_task.save()
+            except TaskkitTask.DoesNotExist:
+                pass
+
+    def fail(self, task: Task, error_message: str):
+        with atomic():
+            try:
+                db_task = TaskkitTask.objects\
+                    .select_for_update()\
+                    .get(pk=task.id)
+                db_task.done = cur_ts()
+                db_task.began = db_task.began or db_task.done
+                db_task.error_message = error_message
+                db_task.disposable = db_task.done + task.ttl
+                db_task.save()
+            except TaskkitTask.DoesNotExist:
+                pass
+
+    def get_result(self, task_id: str) -> Any:
+        try:
+            task = TaskkitTask.objects.get(pk=task_id)
+            if task.done is None:
+                raise NoResult
+            if task.result is None:
+                raise Failed(task.error_message)
+            return self.encoder.decode_result(
+                task.group, task.name, task.result)
+        except TaskkitTask.DoesNotExist:
+            raise NotFound
+
+    def get_done_task_ids(self,
+                          since: float | None,
+                          until: float | None,
+                          limit: int) -> list[str]:
+        return list(
+            TaskkitTask.objects
+            .filter(done__isnull=False,
+                    done__gte=since or 0,
+                    done__lte=until or cur_ts())
+            .values_list('pk', flat=True)
+            .order_by('done')[:limit]
+        )
+
+    def get_disposable_task_ids(self, limit: int) -> list[str]:
+        return list(
+            TaskkitTask.objects
+            .filter(disposable__isnull=False,
+                    disposable__lt=cur_ts())
+            .values_list('pk', flat=True)
+            .order_by('disposable')[:limit]
+        )
+
+    def get_stage_info(self, limit: int) -> list[StageInfo]:
+        return [
+            StageInfo(t.assignee_worker_id, t.pk, t.began)
+            for t in TaskkitTask.objects
+            .filter(done__isnull=True, began__isnull=False)
+            .only('pk', 'assignee_worker_id', 'began')
+            .order_by('began')[:limit]
+        ]
+
+    def restore(self, info: StageInfo):
+        try:
+            task = TaskkitTask.objects\
+                .filter(began__isnull=False)\
+                .get(pk=info.task_id)
+            task.began = None
+            task.assignee_worker_id = None
+            task.save()
+        except TaskkitTask.DoesNotExist:
+            pass
+
+    def get_lock(self, target: str) -> Lock:
+        return DjangoLock(target)
+
+    def persist_scheduler_state_and_put_tasks(self,
+                                              name: str,
+                                              data: bytes,
+                                              *tasks: Task):
+        with atomic():
+            try:
+                state = TaskkitSchedulerState.objects.get(id=name)
+                state.data = data
+                state.save()
+            except TaskkitSchedulerState.DoesNotExist:
+                TaskkitSchedulerState.objects.create(id=name, data=data)
+            self.put_tasks(*tasks)
+
+    def get_scheduler_state(self, name: str) -> bytes | None:
+        return TaskkitSchedulerState.objects\
+            .filter(pk=name)\
+            .values_list('data', flat=True)\
+            .first()
+
+    def destroy_all(self):
+        with atomic():
+            TaskkitLock.objects.all().delete()
+            TaskkitWorker.objects.all().delete()
+            TaskkitTask.objects.all().delete()
+            TaskkitSchedulerState.objects.all().delete()
+
+    def _db_to_task(self, t: TaskkitTask) -> Task:
+        return Task(
+            id=t.pk,
+            name=t.name,
+            data=self.encoder.decode_data(t.group, t.name, t.data),
+            due=t.due,
+            created=t.created,
+            scheduled=t.scheduled,
+            retry_count=t.retry_count,
+            ttl=t.ttl,
+        )
+
+
+def make_kit(encoder: TaskEncoder,
+             handler: TaskHandler) -> Kit:
+    return Kit(DjangoBackend(encoder), DjangoController(), handler)

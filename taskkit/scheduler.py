@@ -184,7 +184,7 @@ class Scheduler(Service):
                 task = Task.init(group=e.group, name=e.name, data=e.data,
                                  due=sp, scheduled=sp)
                 tasks.append(task)
-                logger.info(f'schedule task `{task.id}` at {sp}')
+                logger.info(f'schedule task at {sp} ({task.id}: {task.name})')
 
         self.backend.persist_scheduler_state_and_put_tasks(
             self.name,

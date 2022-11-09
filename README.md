@@ -63,7 +63,9 @@ class Handler(TaskHandler):
 
 ### 3. Make Kit
 
-Now taskkit supports only redis as a backend. So you should do like this:
+#### Use redis impl
+
+You can use redis backend like this:
 
 ```python
 from redis.client import Redis
@@ -74,6 +76,20 @@ REDIS_PORT = '...'
 
 redis = Redis(host=REDIS_HOST, port=REDIS_PORT)
 kit = make_kit(redis, Encoder(), Handler())
+```
+
+#### Use django impl
+
+1. Add `'taskkit.contrib.django'` to `INSTALLED_APPS` in the settings
+2. Run `python manage.py migrate`
+3. Make a `kit` instance like below:
+
+
+```python
+from redis.client import Redis
+from taskkit.impl.django import make_kit
+
+kit = make_kit(Encoder(), Handler())
 ```
 
 

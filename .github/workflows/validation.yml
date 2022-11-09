@@ -43,6 +43,14 @@ jobs:
         python-version: ['3.10', '3.11']
 
     services:
+      mysql:
+        image: mysql/mysql-server:8.0.23
+        ports:
+          - 3306:3306
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: taskkit
+          MYSQL_ROOT_HOST: '%'
       redis:
         image: redis:6.0
         ports:
@@ -61,6 +69,6 @@ jobs:
     - name: Install requirements
       run: |
         pip install -r requirements.txt
-    - name: Test with unittest
+    - name: Unit tests
       run: |
-        python -m unittest
+        python manage.py test
