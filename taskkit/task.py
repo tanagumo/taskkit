@@ -14,7 +14,7 @@ DEFAULT_TASK_TTL = 60 * 60 * 24 * 7
 class Task:
     id: str
     name: str
-    data: Any
+    data: bytes
     due: float
     created: float
     scheduled: float | None
@@ -25,7 +25,7 @@ class Task:
     def init(cls,
              group: str,
              name: str,
-             data: Any,
+             data: bytes,
              due: datetime | float | None = None,
              scheduled: datetime | float | None = None,
              ttl: float = DEFAULT_TASK_TTL) -> 'Task':
@@ -143,4 +143,13 @@ class TaskHandler(Protocol):
         as float. If you don't want to retry the task, you can return None to
         make the task fail or raise DiscardTask to discard the task.
         """
+        ...
+
+    def encode_data(self, group: str, task_name: str, data: Any) -> bytes:
+        ...
+
+    def encode_result(self, task: Task, result: Any) -> bytes:
+        ...
+
+    def decode_result(self, task: Task, encoded: bytes) -> Any:
         ...

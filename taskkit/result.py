@@ -5,6 +5,7 @@ from time import time, sleep
 from typing import Generic, TypeVar, overload, cast
 
 from .backend import Backend, NoResult
+from .task import TaskHandler
 
 
 T = TypeVar('T')
@@ -39,12 +40,14 @@ class Result(Generic[T]):
     @overload
     def __init__(self,
                  backend: Backend,
+                 handler: TaskHandler,
                  task_id: str):
         ...
 
     @overload
     def __init__(self,
                  backend: Backend,
+                 handler: TaskHandler,
                  task_id: str,
                  *,
                  result: T):
@@ -52,9 +55,11 @@ class Result(Generic[T]):
 
     def __init__(self,
                  backend: Backend,
+                 handler: TaskHandler,
                  task_id: str,
                  result: T | _Sentinel = _Sentinel.obj):
         self.backend = backend
+        self.handler = handler
         self.task_id = task_id
         self._result = result
 
@@ -70,9 +75,7 @@ class Result(Generic[T]):
             return cast(T, self._result)
 
         try:
-            ret = self.backend.get_result(self.task_id)
-            self._result = ret
-            return ret
+            return self.__get()
         except NoResult:
             pass
 
@@ -80,9 +83,13 @@ class Result(Generic[T]):
         t = time()
         while timeout is None or (time() - t) < timeout:
             try:
-                ret = self.backend.get_result(self.task_id)
-                self._result = ret
-                return ret
+                return self.__get()
             except NoResult:
                 sleep(min(i * 0.1, 1))
         raise ResultGetTimedOut()
+
+    def __get(self) -> T:
+        task, encoded = self.backend.get_result(self.task_id)
+        ret = self.handler.decode_result(task, encoded)
+        self._result = ret
+        return ret

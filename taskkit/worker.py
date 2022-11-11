@@ -47,7 +47,8 @@ class Worker:
         logger.info(f'[{self.id}] handle task ({task.id}: {task.name})')
         try:
             with prevent_to_wait_result(REASON_TO_PREVENT_WAIT_RESULT):
-                ret = self.handler.handle(task)
+                ret = self.handler.encode_result(
+                    task, self.handler.handle(task))
         except DiscardTask:
             self._discard_task(task)
         except ResultGetPrevented:

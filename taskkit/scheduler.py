@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass, asdict
 from datetime import datetime, tzinfo
-from typing import Any, Protocol, Literal
+from typing import Protocol, Literal
 
 from .backend import Backend
 from .services import Service
@@ -116,16 +116,16 @@ class RegularSchedule(Schedule):
         return True
 
 
-@dataclass
+@dataclass(frozen=True)
 class ScheduleEntry:
     key: str
     schedule: Schedule
     group: str
     name: str
-    data: Any
+    data: bytes
 
 
-@dataclass
+@dataclass(frozen=True)
 class SchedulerState:
     last_run_at: float
 

@@ -62,9 +62,10 @@ class Kit:
                       data: Any,
                       due: datetime | None = None,
                       ttl: float = DEFAULT_TASK_TTL) -> Result[Any]:
-        task = Task.init(group, name=name, data=data, due=due, ttl=ttl)
+        encoded = self.handler.encode_data(group, name, data)
+        task = Task.init(group, name=name, data=encoded, due=due, ttl=ttl)
         self.backend.put_tasks(task)
-        return Result(backend=self.backend, task_id=task.id)
+        return Result(self.backend, self.handler, task.id)
 
     def send_shutdown_event(self, groups: set[str] | None = None):
         event: Shutdown = {

@@ -1,6 +1,6 @@
 import sys
 import time
-from typing import Generator, Any
+from typing import Generator
 
 from django.db.transaction import atomic, Atomic
 from django.db.utils import OperationalError, IntegrityError
@@ -10,7 +10,7 @@ from ..contrib.django.models import TaskkitControlEvent, TaskkitLock, TaskkitWor
 from ..controller import Controller, ControlEvent, encode_control_event, decode_control_event
 from ..kit import Kit
 from ..stage import StageInfo
-from ..task import Task, TaskEncoder, TaskHandler
+from ..task import Task, TaskHandler
 from ..utils import cur_ts
 
 
@@ -79,9 +79,6 @@ class DjangoLock(Lock):
 
 
 class DjangoBackend(Backend):
-    def __init__(self, encoder: TaskEncoder):
-        self.encoder = encoder
-
     def set_worker_ttl(self, worker_ids: set[str], expires_at: float):
         if not worker_ids:
             return
@@ -111,7 +108,7 @@ class DjangoBackend(Backend):
                 id=t.id,
                 group=t.group,
                 name=t.name,
-                data=self.encoder.encode_data(t.group, t.name, t.data),
+                data=t.data,
                 due=t.due,
                 created=t.created,
                 scheduled=t.scheduled,
@@ -164,7 +161,7 @@ class DjangoBackend(Backend):
     def discard_tasks(self, *task_ids: str):
         TaskkitTask.objects.filter(pk__in=task_ids).delete()
 
-    def succeed(self, task: Task, result: Any):
+    def succeed(self, task: Task, result: bytes):
         with atomic():
             try:
                 db_task = TaskkitTask.objects\
@@ -172,8 +169,7 @@ class DjangoBackend(Backend):
                     .get(pk=task.id)
                 db_task.done = cur_ts()
                 db_task.began = db_task.began or db_task.done
-                db_task.result = self.encoder.encode_result(
-                    task.group, task.name, result)
+                db_task.result = result
                 db_task.disposable = db_task.done + task.ttl
                 db_task.save()
             except TaskkitTask.DoesNotExist:
@@ -193,15 +189,15 @@ class DjangoBackend(Backend):
             except TaskkitTask.DoesNotExist:
                 pass
 
-    def get_result(self, task_id: str) -> Any:
+    def get_result(self, task_id: str) -> tuple[Task, bytes]:
         try:
-            task = TaskkitTask.objects.get(pk=task_id)
-            if task.done is None:
-                raise NoResult
-            if task.result is None:
-                raise Failed(task.error_message)
-            return self.encoder.decode_result(
-                task.group, task.name, task.result)
+            db_task = TaskkitTask.objects.get(pk=task_id)
+            task = self._db_to_task(db_task)
+            if db_task.done is None:
+                raise NoResult(task)
+            if db_task.result is None:
+                raise Failed(task, db_task.error_message)
+            return (task, db_task.result)
         except TaskkitTask.DoesNotExist:
             raise NotFound
 
@@ -280,7 +276,7 @@ class DjangoBackend(Backend):
         return Task(
             id=t.pk,
             name=t.name,
-            data=self.encoder.decode_data(t.group, t.name, t.data),
+            data=t.data,
             due=t.due,
             created=t.created,
             scheduled=t.scheduled,
@@ -289,6 +285,5 @@ class DjangoBackend(Backend):
         )
 
 
-def make_kit(encoder: TaskEncoder,
-             handler: TaskHandler) -> Kit:
-    return Kit(DjangoBackend(encoder), DjangoController(), handler)
+def make_kit(handler: TaskHandler) -> Kit:
+    return Kit(DjangoBackend(), DjangoController(), handler)

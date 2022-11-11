@@ -1,5 +1,5 @@
 import json
-from typing import Generator, Any
+from typing import Generator
 
 from redis.client import Redis, Pipeline
 from redis.exceptions import LockError
@@ -9,7 +9,7 @@ from ..backend import Backend, Lock, NotFound, NoResult, Failed
 from ..controller import Controller, ControlEvent, encode_control_event, decode_control_event
 from ..kit import Kit
 from ..stage import StageInfo
-from ..task import Task, TaskEncoder, TaskHandler
+from ..task import Task, TaskHandler
 from ..utils import cur_ts
 
 
@@ -50,11 +50,8 @@ _KEY_PREFIX = 'taskkit.backend'
 
 
 class RedisBackend(Backend):
-    def __init__(self,
-                 redis: Redis,
-                 encoder: TaskEncoder):
+    def __init__(self, redis: Redis):
         self.redis = redis
-        self.encoder = encoder
 
     def workers_key(self) -> str:
         return f'{_KEY_PREFIX}.workers'
@@ -125,8 +122,7 @@ class RedisBackend(Backend):
             pipe.zrem(self.stage_queue_key(), *task_ids)
             pipe.hdel(self.stage_info_key(), *task_ids)
             pipe.hset(self.data_store_key(), mapping={
-                t.id: self.encoder.encode_data(group, t.name, t.data)
-                for t in tasks
+                t.id: t.data for t in tasks
             })
             pipe.hset(self.task_info_key(), mapping={
                 t.id: self._encode_info(t) for t in tasks
@@ -147,11 +143,7 @@ class RedisBackend(Backend):
         data = self.redis.hmget(self.data_store_key(), *task_ids)
 
         return {
-            tid: Task(
-                **(_i := json.loads(i)),
-                data=self.encoder.decode_data(
-                    Task.get_group_from_id(_i['id']), _i['name'], d)
-            )
+            tid: Task(**json.loads(i), data=d)
             if (i is not None and d is not None) else None
             for tid, i, d in zip(task_ids, info, data)
         }
@@ -167,10 +159,7 @@ class RedisBackend(Backend):
                 return None
             info = json.loads(
                 pipe.hget(self.task_info_key(), task_id).decode())
-            task = Task(**info, data=self.encoder.decode_data(
-                Task.get_group_from_id(info['id']),
-                info['name'],
-                pipe.hget(self.data_store_key(), task_id)))
+            task = Task(**info, data=pipe.hget(self.data_store_key(), task_id))
 
             pipe.multi()
             pipe.zrem(self.queue_key(group), task_id)
@@ -199,7 +188,7 @@ class RedisBackend(Backend):
             pipe.hdel(self.error_message_key(), *task_ids)
             pipe.execute()
 
-    def succeed(self, task: Task, result: Any):
+    def succeed(self, task: Task, result: bytes):
         group = task.group
         with self.redis.pipeline() as pipe:
             pipe.zrem(self.queue_key(group), task.id)
@@ -209,8 +198,7 @@ class RedisBackend(Backend):
             pipe.zadd(self.done_queue_key(), {task.id: done})
             pipe.zadd(self.disposable_queue_key(),
                       {task.id: done + task.ttl})
-            pipe.hset(self.result_key(), task.id,
-                      self.encoder.encode_result(group, task.name, result))
+            pipe.hset(self.result_key(), task.id, result)
             pipe.execute()
 
     def fail(self, task: Task, error_message: str):
@@ -227,20 +215,20 @@ class RedisBackend(Backend):
                       error_message.encode('utf-8'))
             pipe.execute()
 
-    def get_result(self, task_id: str) -> Any:
+    def get_result(self, task_id: str) -> tuple[Task, bytes]:
         task = self.lookup_tasks(task_id).get(task_id)
         if task is None:
             raise NotFound
 
         ret = self.redis.hget(self.result_key(), task_id)
         if ret is not None:
-            return self.encoder.decode_result(task.group, task.name, ret)
+            return (task, ret)
 
         message = self.redis.hget(self.error_message_key(), task_id)
         if message is not None:
-            raise Failed(message.decode('utf-8'))
+            raise Failed(task, message.decode('utf-8'))
 
-        raise NoResult
+        raise NoResult(task)
 
     def get_done_task_ids(self,
                           since: float | None,
@@ -307,8 +295,7 @@ class RedisBackend(Backend):
 
 
 def make_kit(redis: Redis,
-             encoder: TaskEncoder,
              handler: TaskHandler) -> Kit:
-    backend = RedisBackend(redis, encoder)
+    backend = RedisBackend(redis)
     controller = RedisController(redis)
     return Kit(backend, controller, handler)

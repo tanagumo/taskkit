@@ -50,8 +50,8 @@ class BackendTests(TestCase):
     def test_tasks(self):
         self.skip_if_needed()
 
-        task_a = Task.init(GROUP, 'a', None)
-        task_b = Task.init(GROUP, 'b', dict(b=True), ttl=0.5)
+        task_a = Task.init(GROUP, 'a', b'a')
+        task_b = Task.init(GROUP, 'b', b'b', ttl=0.5)
 
         self.backend.put_tasks(task_a, task_b)
 
@@ -101,7 +101,7 @@ class BackendTests(TestCase):
             self.assertEqual(si_b.worker_id, worker_b)
 
             # check due
-            task_c = Task.init(GROUP, 'c', dict(c=True),
+            task_c = Task.init(GROUP, 'c', b'c',
                                due=_now() + timedelta(seconds=0.5))
             self.backend.put_tasks(task_c)
             self.assertEqual(
@@ -159,12 +159,14 @@ class BackendTests(TestCase):
                 task_a.id,
             )
 
-            with self.assertRaises(NoResult):
+            with self.assertRaises(NoResult) as ctx:
                 self.backend.get_result(task_a.id)
+            self.assertEqual(ctx.exception.task, task_a)
 
-            RESULT = 'result'
+            RESULT = b'result'
             self.backend.succeed(task_a, RESULT)
-            self.assertEqual(self.backend.get_result(task_a.id), RESULT)
+            self.assertEqual(self.backend.get_result(task_a.id),
+                             (task_a, RESULT))
             self.assertEqual(self.backend.get_done_task_ids(None, None, 10),
                              [task_a.id])
             self.assertEqual(self.backend.get_disposable_task_ids(10), [])
@@ -173,6 +175,7 @@ class BackendTests(TestCase):
             self.backend.fail(task_b, ERROR_MESSAGE)
             with self.assertRaises(Failed) as ctx:
                 self.backend.get_result(task_b.id)
+            self.assertEqual(ctx.exception.task, task_b)
             self.assertEqual(ctx.exception.message, ERROR_MESSAGE)
 
             self.assertEqual(self.backend.get_done_task_ids(None, None, 10),
@@ -245,9 +248,9 @@ class BackendTests(TestCase):
         self.skip_if_needed()
 
         scheduled_a = _now()
-        task_a = Task.init(GROUP, 'a', None, scheduled=scheduled_a)
+        task_a = Task.init(GROUP, 'a', b'a', scheduled=scheduled_a)
         scheduled_b = _now()
-        task_b = Task.init(GROUP, 'b', dict(b=True), scheduled=scheduled_b)
+        task_b = Task.init(GROUP, 'b', b'b', scheduled=scheduled_b)
 
         name = 'scheduler_name'
         scheduler_state_data = b'test'

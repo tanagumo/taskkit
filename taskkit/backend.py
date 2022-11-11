@@ -1,4 +1,4 @@
-from typing import Protocol, Any
+from typing import Protocol
 
 from .task import Task
 from .stage import StageInfo
@@ -19,11 +19,13 @@ class NotFound(Exception):
 
 
 class NoResult(Exception):
-    pass
+    def __init__(self, task: Task):
+        self.task = task
 
 
 class Failed(Exception):
-    def __init__(self, message: str):
+    def __init__(self, task: Task, message: str):
+        self.task = task
         self.message = message
 
 
@@ -65,7 +67,7 @@ class Backend(Protocol):
         """Discard the tasks"""
         ...
 
-    def succeed(self, task: Task, result: Any):
+    def succeed(self, task: Task, result: bytes):
         """Save the result and remove the task from the stage"""
         ...
 
@@ -73,8 +75,9 @@ class Backend(Protocol):
         """Save the error message and remove the task from the stage"""
         ...
 
-    def get_result(self, task_id: str) -> Any:
-        """It returns result for given task_id or raises suitable exception
+    def get_result(self, task_id: str) -> tuple[Task, bytes]:
+        """It returns a tuple of the task and the result for given task_id or
+        raises suitable exception.
 
         It raises
         - NotFound if the task was not found
