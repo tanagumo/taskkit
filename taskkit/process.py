@@ -13,7 +13,7 @@ from .services import RefreshWorkerLifetime, PurgeDeadWorkers,\
 from .utils import logger
 
 
-class MainProcess(Process):
+class TaskkitProcess(Process):
     def __init__(self,
                  num_worker_threads_per_group: dict[str, int],
                  backend: Backend,
