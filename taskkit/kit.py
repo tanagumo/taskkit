@@ -42,13 +42,15 @@ class Kit:
                 while True:
                     for i, p in enumerate(list(processes)):
                         if not p.is_alive() or should_restart(p):
-                            p.terminate()
+                            if p.is_active():
+                                p.terminate()
                             p.join()
                             processes[i] = _start()
                     time.sleep(1)
         except (KeyboardInterrupt, SystemExit, SignalCaptured) as e:
             for p in processes:
-                p.terminate()
+                if p.is_active():
+                    p.terminate()
             for p in processes:
                 p.join()
             if isinstance(e, SignalCaptured):

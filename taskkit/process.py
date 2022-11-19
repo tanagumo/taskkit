@@ -1,6 +1,6 @@
 import os
 from datetime import tzinfo
-from multiprocessing import Process
+from multiprocessing import Process, Event
 
 from .backend import Backend
 from .controller import Controller
@@ -30,7 +30,11 @@ class TaskkitProcess(Process):
         self.handler = handler
         self.schedule_entries = schedule_entries
         self.tzinfo = tzinfo
+        self._terminate_event = Event()
         super().__init__(**kwargs)
+
+    def is_active(self) -> bool:
+        return not self._terminate_event.is_set()
 
     def run(self):
         _id = f'{os.getpid()}'
@@ -89,7 +93,7 @@ class TaskkitProcess(Process):
                     except Exception:
                         pass
         except (KeyboardInterrupt, SystemExit, SignalCaptured):
-            pass
+            self._terminate_event.set()
 
         logger.info(f'[{_id}] shutting down...')
 
