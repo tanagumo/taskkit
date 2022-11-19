@@ -50,8 +50,11 @@ class ServiceThread(Thread):
         while not self.should_stop:
             try:
                 time_to_wait = self.service()
-                if time_to_wait > 0:
-                    time.sleep(time_to_wait)
+                while time_to_wait > 0:
+                    time.sleep(min(1, time_to_wait))
+                    time_to_wait -= 1
+                    if self.should_stop:
+                        return
             except Exception:
                 logger.exception(
                     'Unexpected exception occurred during service call '
