@@ -96,13 +96,18 @@ kit = make_kit(Handler())
 ```python
 GROUP_NAME = 'Any task group name'
 
+# it starts busy loop
 kit.start(
-    # number of worker threads per process
-    num_worker_threads_per_group={GROUP_NAME: 3},
     # number of processes
     num_processes=3,
-    # if join is True, it wait until all processes stopped
-    join=True)
+    # number of worker threads per process
+    num_worker_threads_per_group={GROUP_NAME: 3})
+
+# you can use `start_processes` to avoid busy loop
+kit.start_processes(
+    num_processes=3,
+    num_worker_threads_per_group={GROUP_NAME: 3},
+    daemon=True)
 ```
 
 
@@ -166,11 +171,9 @@ schedule_entries = {
 
 # pass the entries with kit.start
 kit.start(
-    num_worker_threads_per_group={GROUP_NAME: 3},
     num_processes=3,
+    num_worker_threads_per_group={GROUP_NAME: 3},
 
     schedule_entries=schedule_entries,
-    tzinfo=timezone(timedelta(hours=9), 'JST'),
-
-    join=True)
+    tzinfo=timezone(timedelta(hours=9), 'JST'))
 ```
