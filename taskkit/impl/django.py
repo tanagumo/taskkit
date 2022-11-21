@@ -103,25 +103,7 @@ class DjangoBackend(Backend):
     def put_tasks(self, *tasks: Task):
         if not tasks:
             return
-        objects = [
-            TaskkitTask(
-                id=t.id,
-                group=t.group,
-                name=t.name,
-                data=t.data,
-                due=t.due,
-                created=t.created,
-                scheduled=t.scheduled,
-                retry_count=t.retry_count,
-                ttl=t.ttl,
-                assignee_worker_id=None,
-                began=None,
-                result=None,
-                done=None,
-                disposable=None,
-            )
-            for t in tasks
-        ]
+        objects = [self._task_to_db(t) for t in tasks]
         with atomic():
             self.discard_tasks(*[t.pk for t in objects])
             TaskkitTask.objects.bulk_create(objects, ignore_conflicts=True)
@@ -167,13 +149,13 @@ class DjangoBackend(Backend):
                 db_task = TaskkitTask.objects\
                     .select_for_update()\
                     .get(pk=task.id)
-                db_task.done = cur_ts()
-                db_task.began = db_task.began or db_task.done
-                db_task.result = result
-                db_task.disposable = db_task.done + task.ttl
-                db_task.save()
             except TaskkitTask.DoesNotExist:
-                pass
+                db_task = self._task_to_db(task)
+            db_task.done = cur_ts()
+            db_task.began = db_task.began or db_task.done
+            db_task.result = result
+            db_task.disposable = db_task.done + task.ttl
+            db_task.save()
 
     def fail(self, task: Task, error_message: str):
         with atomic():
@@ -181,13 +163,14 @@ class DjangoBackend(Backend):
                 db_task = TaskkitTask.objects\
                     .select_for_update()\
                     .get(pk=task.id)
-                db_task.done = cur_ts()
-                db_task.began = db_task.began or db_task.done
-                db_task.error_message = error_message
-                db_task.disposable = db_task.done + task.ttl
-                db_task.save()
             except TaskkitTask.DoesNotExist:
-                pass
+                db_task = self._task_to_db(task)
+
+            db_task.done = cur_ts()
+            db_task.began = db_task.began or db_task.done
+            db_task.error_message = error_message
+            db_task.disposable = db_task.done + task.ttl
+            db_task.save()
 
     def get_result(self, task_id: str) -> tuple[Task, bytes]:
         try:
@@ -282,6 +265,24 @@ class DjangoBackend(Backend):
             scheduled=t.scheduled,
             retry_count=t.retry_count,
             ttl=t.ttl,
+        )
+
+    def _task_to_db(self, t: Task) -> TaskkitTask:
+        return TaskkitTask(
+            id=t.id,
+            group=t.group,
+            name=t.name,
+            data=t.data,
+            due=t.due,
+            created=t.created,
+            scheduled=t.scheduled,
+            retry_count=t.retry_count,
+            ttl=t.ttl,
+            assignee_worker_id=None,
+            began=None,
+            result=None,
+            done=None,
+            disposable=None,
         )
 
 

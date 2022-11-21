@@ -121,13 +121,18 @@ class RedisBackend(Backend):
             task_ids = [t.id for t in tasks]
             pipe.zrem(self.stage_queue_key(), *task_ids)
             pipe.hdel(self.stage_info_key(), *task_ids)
-            pipe.hset(self.data_store_key(), mapping={
-                t.id: t.data for t in tasks
-            })
-            pipe.hset(self.task_info_key(), mapping={
-                t.id: self._encode_info(t) for t in tasks
-            })
+            self._put_task_data(pipe, *_tasks)
             pipe.zadd(self.queue_key(group), {t.id: t.due for t in tasks})
+
+    def _put_task_data(self, pipe: Pipeline, *tasks: Task):
+        if not tasks:
+            return
+        pipe.hset(self.data_store_key(), mapping={
+            t.id: t.data for t in tasks
+        })
+        pipe.hset(self.task_info_key(), mapping={
+            t.id: self._encode_info(t) for t in tasks
+        })
 
     def get_queued_tasks(self, group: str, limit: int) -> list[Task]:
         task_ids = list(
@@ -199,6 +204,7 @@ class RedisBackend(Backend):
             pipe.zadd(self.disposable_queue_key(),
                       {task.id: done + task.ttl})
             pipe.hset(self.result_key(), task.id, result)
+            self._put_task_data(pipe, task)
             pipe.execute()
 
     def fail(self, task: Task, error_message: str):
@@ -213,6 +219,7 @@ class RedisBackend(Backend):
                       {task.id: done + task.ttl})
             pipe.hset(self.error_message_key(), task.id,
                       error_message.encode('utf-8'))
+            self._put_task_data(pipe, task)
             pipe.execute()
 
     def get_result(self, task_id: str) -> tuple[Task, bytes]:

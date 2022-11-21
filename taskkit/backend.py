@@ -68,11 +68,13 @@ class Backend(Protocol):
         ...
 
     def succeed(self, task: Task, result: bytes):
-        """Save the result and remove the task from the stage"""
+        """Save the result and remove the task from the stage. It should
+        save the task data if the task is missing in the backend."""
         ...
 
     def fail(self, task: Task, error_message: str):
-        """Save the error message and remove the task from the stage"""
+        """Save the error message and remove the task from the stage. It should
+        save the task data if the task is missing in the backend."""
         ...
 
     def get_result(self, task_id: str) -> tuple[Task, bytes]:
