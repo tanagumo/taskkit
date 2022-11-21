@@ -1,8 +1,9 @@
-from uuid import uuid4
 from traceback import format_exc
+from typing import Any
+from uuid import uuid4
 
 from .backend import Backend
-from .result import prevent_to_wait_result, ResultGetPrevented
+from .result import Result, prevent_to_wait_result, ResultGetPrevented
 from .task import Task, TaskHandler, DiscardTask
 from .utils import logger
 
@@ -94,3 +95,18 @@ class Worker:
         logger.info(f'[{self.id}] retry n{clone.retry_count} '
                     f'({task.id}: {task.name})')
         self.backend.put_tasks(clone)
+
+
+class EagerWorker(Worker):
+    def __init__(self, backend: Backend, handler: TaskHandler):
+        super().__init__('_', backend, handler)
+
+    def __call__(self) -> bool:
+        raise AssertionError('Can not call EagerWorker')
+
+    def handle_task(self, task: Task) -> Result[Any]:
+        self._handle_task(task)
+        return Result(self.backend, self.handler, task.id)
+
+    def _handle_error(self, task: Task, exception: Exception):
+        self.backend.fail(task, format_exc())

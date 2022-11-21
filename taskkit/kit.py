@@ -10,6 +10,7 @@ from .scheduler import ScheduleEntry
 from .signal import SignalCaptured, capture_signals, signal
 from .task import Task, TaskHandler, DEFAULT_TASK_TTL
 from .utils import local_tz
+from .worker import EagerWorker
 
 
 class Kit:
@@ -20,6 +21,7 @@ class Kit:
         self.backend = backend
         self.controller = controller
         self.handler = handler
+        self.eager_worker = EagerWorker(backend, handler)
 
     def start(self,
               num_processes: int,
@@ -93,9 +95,12 @@ class Kit:
                       name: str,
                       data: Any,
                       due: datetime | None = None,
-                      ttl: float = DEFAULT_TASK_TTL) -> Result[Any]:
+                      ttl: float = DEFAULT_TASK_TTL,
+                      eager: bool = False) -> Result[Any]:
         encoded = self.handler.encode_data(group, name, data)
         task = Task.init(group, name=name, data=encoded, due=due, ttl=ttl)
+        if eager:
+            return self.eager_worker.handle_task(task)
         self.backend.put_tasks(task)
         return Result(self.backend, self.handler, task.id)
 
