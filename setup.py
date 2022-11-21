@@ -23,7 +23,7 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    packages=["taskkit"],
+    packages=setuptools.find_packages(),
     package_dir={"taskkit": "taskkit"},
     python_requires=">=3.10",
 )
