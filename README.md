@@ -137,13 +137,21 @@ except ResultGetTimedOut:
 
 ```python
 from datetime import timezone, timedelta
-from taskkit import ScheduleEntry, RegularSchedule
+from taskkit import ScheduleEntry, ScheduleEntryDict, RegularSchedule, ScheduleEntriesCompatMapping
 
 # define entries
 # key is a name for scheduler
 # value is a list of instances of ScheduleEntry
-schedule_entries = {
+#       or a list of dicts conforming to ScheduleEntryDict
+# 
+# ScheduleEntryCompat: TypeAlias = ScheduleEntry | ScheduleEntryDict
+# ScheduleEntriesCompat: TypeAlias = Sequence[ScheduleEntryCompat]
+# ScheduleEntriesCompatMapping: TypeAlias = Mapping[str, ScheduleEntriesCompat]
+#
+schedule_entries: ScheduleEntriesCompatMapping = {
     'scheduler_name': [
+        # You can use ScheduleEntry instance as follows. Note that the data
+        # MUST be encoded by the same algorithm as `Handler.encode_data`.
         ScheduleEntry(
             # A key which can identify the schedule in the list
             key='...',
@@ -151,8 +159,10 @@ schedule_entries = {
             group=GROUP_NAME,
             # task name
             name='test2',
-            # task data encoded by the same algorithm as `Handler.encode_data`
-            data=b'...',
+
+            # The data MUST BE encoded by the same algorithm as
+            # `Handler.encode_data` so it would looks like:
+            data=Handler.encode_data(GROUP_NAME, 'test2', 'SOME DATA'),
 
             # It means that the scheduler will initiate the task twice
             # an hour at **:00:00 and **:30:00.
@@ -161,6 +171,21 @@ schedule_entries = {
                 minutes={0, 30},
             ),
         ),
+
+        # You can use dict form of schedule entry (recommended).
+        # Note that in dict form, the data MUST NOT be encoded because `Kit`
+        # takes care of encoding for convenience. Other properties are same
+        # as ScheduleEntry. Also you can use ScheduleEntryDict for annotation.
+        {
+            'key': '...',
+            'group': GROUP_NAME,
+            'name': 'test3',
+
+            # IT MUST NOT BE ENCODED
+            'data': 2,
+
+            'schedule': RegularSchedule(seconds={0}, minutes={30}),
+        }
     ],
 
     # You can have multiple schedulers
