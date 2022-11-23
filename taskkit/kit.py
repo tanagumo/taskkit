@@ -1,16 +1,29 @@
 import time
 from datetime import datetime, tzinfo
-from typing import Any, Callable
+from typing import Any, Callable, Mapping, Sequence, TypeAlias, TypedDict
 
 from .backend import Backend
 from .controller import Controller, Shutdown, Pause, Resume
 from .process import TaskkitProcess
 from .result import Result
-from .scheduler import ScheduleEntry
+from .scheduler import ScheduleEntry, Schedule
 from .signal import SignalCaptured, capture_signals, signal
 from .task import Task, TaskHandler, DEFAULT_TASK_TTL
 from .utils import local_tz
 from .worker import EagerWorker
+
+
+class ScheduleEntryDict(TypedDict):
+    key: str
+    schedule: Schedule
+    group: str
+    name: str
+    data: Any
+
+
+ScheduleEntryCompat: TypeAlias = ScheduleEntry | ScheduleEntryDict
+ScheduleEntriesCompat: TypeAlias = Sequence[ScheduleEntryCompat]
+ScheduleEntriesCompatMapping: TypeAlias = Mapping[str, ScheduleEntriesCompat]
 
 
 class Kit:
@@ -26,9 +39,11 @@ class Kit:
     def start(self,
               num_processes: int,
               num_worker_threads_per_group: dict[str, int],
-              schedule_entries: dict[str, list[ScheduleEntry]] = {},
+              schedule_entries: ScheduleEntriesCompatMapping = {},
               tzinfo: tzinfo | None = None,
               should_restart: Callable[[TaskkitProcess], bool] = lambda _: False):
+
+        schedule_entries = self._ensure_schedule_entries(schedule_entries)
 
         def _start():
             return self._start_process(
@@ -63,9 +78,10 @@ class Kit:
     def start_processes(self,
                         num_processes: int,
                         num_worker_threads_per_group: dict[str, int],
-                        schedule_entries: dict[str, list[ScheduleEntry]] = {},
+                        schedule_entries: ScheduleEntriesCompatMapping = {},
                         tzinfo: tzinfo | None = None,
                         daemon: bool = True) -> list[TaskkitProcess]:
+        schedule_entries = self._ensure_schedule_entries(schedule_entries)
         return [
             self._start_process(num_worker_threads_per_group,
                                 schedule_entries,
@@ -89,6 +105,27 @@ class Kit:
             daemon=daemon)
         p.start()
         return p
+
+    def _ensure_schedule_entries(self, entries: ScheduleEntriesCompatMapping)\
+            -> dict[str, list[ScheduleEntry]]:
+
+        return {
+            k: [self._ensure_schedule_entry(e) for e in v]
+            for k, v in entries.items()
+        }
+
+    def _ensure_schedule_entry(self, entry: ScheduleEntry | ScheduleEntryDict)\
+            -> ScheduleEntry:
+        if isinstance(entry, dict):
+            return ScheduleEntry(
+                key=entry['key'],
+                schedule=entry['schedule'],
+                group=entry['group'],
+                name=entry['name'],
+                data=self.handler.encode_data(
+                    entry['group'], entry['name'], entry['data']),
+            )
+        return entry
 
     def initiate_task(self,
                       group: str,
