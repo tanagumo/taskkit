@@ -31,7 +31,7 @@ class Kit:
               should_restart: Callable[[TaskkitProcess], bool] = lambda _: False):
 
         def _start():
-            return self.start_process(
+            return self._start_process(
                 num_worker_threads_per_group=num_worker_threads_per_group,
                 schedule_entries=schedule_entries,
                 tzinfo=tzinfo,
@@ -67,18 +67,18 @@ class Kit:
                         tzinfo: tzinfo | None = None,
                         daemon: bool = True) -> list[TaskkitProcess]:
         return [
-            self.start_process(num_worker_threads_per_group,
-                               schedule_entries,
-                               tzinfo,
-                               daemon)
+            self._start_process(num_worker_threads_per_group,
+                                schedule_entries,
+                                tzinfo,
+                                daemon)
             for _ in range(num_processes)
         ]
 
-    def start_process(self,
-                      num_worker_threads_per_group: dict[str, int],
-                      schedule_entries: dict[str, list[ScheduleEntry]] = {},
-                      tzinfo: tzinfo | None = None,
-                      daemon: bool = True) -> TaskkitProcess:
+    def _start_process(self,
+                       num_worker_threads_per_group: dict[str, int],
+                       schedule_entries: dict[str, list[ScheduleEntry]] = {},
+                       tzinfo: tzinfo | None = None,
+                       daemon: bool = True) -> TaskkitProcess:
         p = TaskkitProcess(
             num_worker_threads_per_group=num_worker_threads_per_group,
             backend=self.backend,
