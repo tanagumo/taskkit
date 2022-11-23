@@ -1,4 +1,3 @@
-import json
 from dataclasses import dataclass, fields
 from datetime import datetime, timezone
 from typing import Any, Protocol
@@ -98,34 +97,6 @@ class Task:
 
 class DiscardTask(Exception):
     pass
-
-
-class TaskEncoder(Protocol):
-    def encode_data(self, group: str, task_name: str, data: Any) -> bytes:
-        ...
-
-    def decode_data(self, group: str, task_name, encoded: bytes) -> Any:
-        ...
-
-    def encode_result(self, group: str, task_name: str, result: Any) -> bytes:
-        ...
-
-    def decode_result(self, group: str, task_name: str, encoded: bytes) -> Any:
-        ...
-
-
-class JsonTaskEncoder(TaskEncoder):
-    def encode_data(self, group: str, task_name: str, data: Any) -> bytes:
-        return json.dumps(data).encode()
-
-    def decode_data(self, group: str, task_name, encoded: bytes) -> Any:
-        return json.loads(encoded)
-
-    def encode_result(self, group: str, task_name: str, result: Any) -> bytes:
-        return json.dumps(result).encode()
-
-    def decode_result(self, group: str, task_name: str, encoded: bytes) -> Any:
-        return json.loads(encoded)
 
 
 class TaskHandler(Protocol):

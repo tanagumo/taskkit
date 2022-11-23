@@ -38,7 +38,7 @@ class TaskkitProcess(Process):
 
     def run(self):
         _id = f'{os.getpid()}'
-        logger.info(f'[{_id}] main process started: '
+        logger.info(f'[{_id}] taskkit process started: '
                     f'{self.num_worker_threads}')
 
         backend = self.backend
