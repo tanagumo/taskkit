@@ -6,16 +6,16 @@ from redis.exceptions import LockError
 from redis.lock import Lock as _RedisLock
 
 from ..backend import Backend, Lock, NotFound, NoResult, Failed
-from ..controller import Controller, ControlEvent, encode_control_event, decode_control_event
+from ..event import EventBridge, ControlEvent, encode_control_event, decode_control_event
 from ..kit import Kit
 from ..stage import StageInfo
 from ..task import Task, TaskHandler
 from ..utils import cur_ts
 
 
-class RedisController(Controller):
+class RedisEventBridge(EventBridge):
     def __init__(self, redis: Redis):
-        self.channel = 'taskkit.redis_controller.channel'
+        self.channel = 'taskkit.redis_bridge.channel'
         self.redis = redis
 
     def receive_events(self) -> Generator[ControlEvent, None, None]:
@@ -304,5 +304,5 @@ class RedisBackend(Backend):
 def make_kit(redis: Redis,
              handler: TaskHandler) -> Kit:
     backend = RedisBackend(redis)
-    controller = RedisController(redis)
-    return Kit(backend, controller, handler)
+    bridge = RedisEventBridge(redis)
+    return Kit(backend, bridge, handler)

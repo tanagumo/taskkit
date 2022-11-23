@@ -3,7 +3,7 @@ from datetime import tzinfo
 from multiprocessing import Process, Event
 
 from .backend import Backend
-from .controller import Controller
+from .event import EventBridge
 from .scheduler import ScheduleEntry, Scheduler
 from .signal import SignalCaptured, capture_signals, signal
 from .task import TaskHandler
@@ -17,7 +17,7 @@ class TaskkitProcess(Process):
     def __init__(self,
                  num_worker_threads_per_group: dict[str, int],
                  backend: Backend,
-                 controller: Controller,
+                 bridge: EventBridge,
                  handler: TaskHandler,
                  schedule_entries: dict[str, list[ScheduleEntry]],
                  tzinfo: tzinfo,
@@ -26,7 +26,7 @@ class TaskkitProcess(Process):
             'All values for num_worker_threads_per_group must be positive int.'
         self.num_worker_threads = num_worker_threads_per_group
         self.backend = backend
-        self.controller = controller
+        self.bridge = bridge
         self.handler = handler
         self.schedule_entries = schedule_entries
         self.tzinfo = tzinfo
@@ -68,7 +68,7 @@ class TaskkitProcess(Process):
             with capture_signals(signal.SIGTERM):
                 while True:
                     try:
-                        for event in self.controller.receive_events():
+                        for event in self.bridge.receive_events():
                             target_groups =\
                                 (alive
                                  if (_groups := event['groups']) is None
