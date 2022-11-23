@@ -3,7 +3,7 @@ from datetime import datetime, tzinfo
 from typing import Any, Callable, Mapping, Sequence, TypeAlias, TypedDict
 
 from .backend import Backend
-from .controller import Controller, Shutdown, Pause, Resume
+from .event import EventBridge, Shutdown, Pause, Resume
 from .process import TaskkitProcess
 from .result import Result
 from .scheduler import ScheduleEntry, Schedule
@@ -29,10 +29,10 @@ ScheduleEntriesCompatMapping: TypeAlias = Mapping[str, ScheduleEntriesCompat]
 class Kit:
     def __init__(self,
                  backend: Backend,
-                 controller: Controller,
+                 bridge: EventBridge,
                  handler: TaskHandler):
         self.backend = backend
-        self.controller = controller
+        self.bridge = bridge
         self.handler = handler
         self.eager_worker = EagerWorker(backend, handler)
 
@@ -98,7 +98,7 @@ class Kit:
         p = TaskkitProcess(
             num_worker_threads_per_group=num_worker_threads_per_group,
             backend=self.backend,
-            controller=self.controller,
+            bridge=self.bridge,
             handler=self.handler,
             schedule_entries=schedule_entries,
             tzinfo=tzinfo or local_tz(),
@@ -146,18 +146,18 @@ class Kit:
             'name': 'shutdown',
             'groups': None if groups is None else list(groups),
         }
-        self.controller.send_event(event)
+        self.bridge.send_event(event)
 
     def send_pause_event(self, groups: set[str] | None = None):
         event: Pause = {
             'name': 'pause',
             'groups': None if groups is None else list(groups),
         }
-        self.controller.send_event(event)
+        self.bridge.send_event(event)
 
     def send_resume_event(self, groups: set[str] | None = None):
         event: Resume = {
             'name': 'resume',
             'groups': None if groups is None else list(groups),
         }
-        self.controller.send_event(event)
+        self.bridge.send_event(event)

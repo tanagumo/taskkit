@@ -7,14 +7,14 @@ from django.db.utils import OperationalError, IntegrityError
 
 from ..backend import Backend, Lock, NotFound, NoResult, Failed
 from ..contrib.django.models import TaskkitControlEvent, TaskkitLock, TaskkitWorker, TaskkitTask, TaskkitSchedulerState
-from ..controller import Controller, ControlEvent, encode_control_event, decode_control_event
+from ..event import EventBridge, ControlEvent, encode_control_event, decode_control_event
 from ..kit import Kit
 from ..stage import StageInfo
 from ..task import Task, TaskHandler
 from ..utils import cur_ts
 
 
-class DjangoController(Controller):
+class DjangoEventBridge(EventBridge):
     def receive_events(self) -> Generator[ControlEvent, None, None]:
         offset = cur_ts()
         while True:
@@ -287,4 +287,4 @@ class DjangoBackend(Backend):
 
 
 def make_kit(handler: TaskHandler) -> Kit:
-    return Kit(DjangoBackend(), DjangoController(), handler)
+    return Kit(DjangoBackend(), DjangoEventBridge(), handler)

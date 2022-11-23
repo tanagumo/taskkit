@@ -20,7 +20,7 @@ class Resume(TypedDict):
 ControlEvent: TypeAlias = Shutdown | Pause | Resume
 
 
-class Controller(Protocol):
+class EventBridge(Protocol):
     def receive_events(self) -> Generator[ControlEvent, None, None]:
         ...
 
