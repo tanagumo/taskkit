@@ -132,10 +132,11 @@ class DjangoBackend(Backend):
                     db_task = TaskkitTask.objects\
                         .select_for_update(nowait=True)\
                         .get(pk=pk)
-                    db_task.assignee_worker_id = worker_id
-                    db_task.began = cur_ts()
-                    db_task.save()
-                    return self._db_to_task(db_task)
+                    if db_task.began is None:
+                        db_task.assignee_worker_id = worker_id
+                        db_task.began = cur_ts()
+                        db_task.save()
+                        return self._db_to_task(db_task)
                 except (OperationalError, TaskkitTask.DoesNotExist):
                     pass
         return None
