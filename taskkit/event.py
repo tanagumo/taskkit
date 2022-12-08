@@ -1,23 +1,23 @@
 import json
-from typing import TypeAlias, Protocol, Generator, Literal, TypedDict
+from typing import Protocol, Generator, Literal, TypedDict, Optional, Union
 
 
 class Shutdown(TypedDict):
     name: Literal['shutdown']
-    groups: list[str] | None
+    groups: Optional[list[str]]
 
 
 class Pause(TypedDict):
     name: Literal['pause']
-    groups: list[str] | None
+    groups: Optional[list[str]]
 
 
 class Resume(TypedDict):
     name: Literal['resume']
-    groups: list[str] | None
+    groups: Optional[list[str]]
 
 
-ControlEvent: TypeAlias = Shutdown | Pause | Resume
+ControlEvent = Union[Shutdown, Pause, Resume]
 
 
 class EventBridge(Protocol):
@@ -32,7 +32,7 @@ def encode_control_event(event: ControlEvent) -> bytes:
     return json.dumps(event).encode('utf-8')
 
 
-def decode_control_event(encoded: bytes) -> ControlEvent | None:
+def decode_control_event(encoded: bytes) -> Optional[ControlEvent]:
     try:
         event: ControlEvent = json.loads(encoded.decode('utf-8'))
         assert isinstance(event['name'], str)

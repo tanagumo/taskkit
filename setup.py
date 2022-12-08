@@ -25,5 +25,5 @@ setuptools.setup(
     ],
     packages=setuptools.find_packages(exclude=["tests"]),
     package_dir={"taskkit": "taskkit"},
-    python_requires=">=3.10",
+    python_requires=">=3.9",
 )

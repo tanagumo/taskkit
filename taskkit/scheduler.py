@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass, asdict
 from datetime import datetime, tzinfo
-from typing import Protocol, Literal
+from typing import Protocol, Literal, Optional, Union
 
 from .backend import Backend
 from .services import Service
@@ -14,12 +14,12 @@ SCHEDULE_POINT_INTERVAL = 5
 
 
 class Schedule(Protocol):
-    def get_timezone(self) -> tzinfo | None:
+    def get_timezone(self) -> Optional[tzinfo]:
         ...
 
     def __call__(self,
                  schedule_points: list[datetime],
-                 last_scheduled_at: datetime | None,
+                 last_scheduled_at: Optional[datetime],
                  /) -> list[datetime]:
         ...
 
@@ -27,7 +27,7 @@ class Schedule(Protocol):
 class DuplicationPolicy(Protocol):
     def __call__(self,
                  schedule_points: list[datetime],
-                 last_scheduled_at: datetime | None,
+                 last_scheduled_at: Optional[datetime],
                  /) -> list[datetime]:
         ...
 
@@ -35,7 +35,7 @@ class DuplicationPolicy(Protocol):
 class OnlyEarliest(DuplicationPolicy):
     def __call__(self,
                  schedule_points: list[datetime],
-                 last_scheduled_at: datetime | None,
+                 last_scheduled_at: Optional[datetime],
                  /) -> list[datetime]:
         return schedule_points[:1]
 
@@ -43,7 +43,7 @@ class OnlyEarliest(DuplicationPolicy):
 class OnlyLatest(DuplicationPolicy):
     def __call__(self,
                  schedule_points: list[datetime],
-                 last_scheduled_at: datetime | None,
+                 last_scheduled_at: Optional[datetime],
                  /) -> list[datetime]:
         return schedule_points[-1:]
 
@@ -57,13 +57,13 @@ class RegularSchedule(Schedule):
     _months = set(range(1, 13))
 
     def __init__(self,
-                 seconds: Literal['*'] | set[int] | int | None = 0,
-                 minutes: Literal['*'] | set[int] | int | None = None,
-                 hours: Literal['*'] | set[int] | int | None = None,
-                 days: Literal['*'] | set[int] | int | None = None,
-                 weekdays: Literal['*'] | set[int] | int | None = None,
-                 months: Literal['*'] | set[int] | int | None = None,
-                 tzinfo: tzinfo | None = None,
+                 seconds: Union[Literal['*'], set[int], int, None] = 0,
+                 minutes: Union[Literal['*'], set[int], int, None] = None,
+                 hours: Union[Literal['*'], set[int], int, None] = None,
+                 days: Union[Literal['*'], set[int], int, None] = None,
+                 weekdays: Union[Literal['*'], set[int], int, None] = None,
+                 months: Union[Literal['*'], set[int], int, None] = None,
+                 tzinfo: Optional[tzinfo] = None,
                  duplication_policy: DuplicationPolicy = OnlyLatest()):
         self.seconds = self._ensure('seconds', seconds, self._seconds)
         self.minutes = self._ensure('minutes', minutes, self._minutes)
@@ -74,14 +74,14 @@ class RegularSchedule(Schedule):
         self.tzinfo = tzinfo
         self.duplication_policy = duplication_policy
 
-    def get_timezone(self) -> tzinfo | None:
+    def get_timezone(self) -> Optional[tzinfo]:
         if self.tzinfo is None:
             return None
         return self.tzinfo
 
     @staticmethod
     def _ensure(key: str,
-                value: Literal['*'] | set[int] | int | None,
+                value: Union[Literal['*'], set[int], int, None],
                 all_valid_values: set[int]) -> set[int]:
         if value is None or value == '*':
             return all_valid_values
@@ -94,7 +94,7 @@ class RegularSchedule(Schedule):
 
     def __call__(self,
                  schedule_points: list[datetime],
-                 last_scheduled_at: datetime | None,
+                 last_scheduled_at: Optional[datetime],
                  /) -> list[datetime]:
         return self.duplication_policy(
             [p for p in schedule_points if self._filter(p)],
@@ -194,7 +194,7 @@ class Scheduler(Service):
     def _encode_state(self, state: SchedulerState) -> bytes:
         return json.dumps(asdict(state)).encode()
 
-    def _get_state(self) -> SchedulerState | None:
+    def _get_state(self) -> Optional[SchedulerState]:
         data = self.backend.get_scheduler_state(self.name)
         if data is None:
             return None
@@ -202,7 +202,7 @@ class Scheduler(Service):
         return SchedulerState(**json.loads(data.decode()))
 
     def _list_schedule_points(
-            self, state: SchedulerState | None) -> list[float]:
+            self, state: Optional[SchedulerState]) -> list[float]:
         at = self._round(cur_ts())
         if state is None:
             return [at]

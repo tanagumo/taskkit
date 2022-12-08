@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 from unittest import TestCase
 
 from taskkit.kit import Kit
@@ -18,7 +18,7 @@ class Handler(TaskHandler):
 
     def get_retry_interval(self,
                            task: Task,
-                           exception: Exception) -> float | None:
+                           exception: Exception) -> Optional[float]:
         return 1
 
     def encode_data(self, group: str, task_name: str, data: Any) -> bytes:

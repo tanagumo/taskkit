@@ -1,15 +1,16 @@
 import signal
 from contextlib import contextmanager
 from types import FrameType
+from typing import Optional
 
 
 class SignalCaptured(BaseException):
-    def __init__(self, signal: int, frame: FrameType | None):
+    def __init__(self, signal: int, frame: Optional[FrameType]):
         self.signal = signal
         self.frame = frame
 
     @classmethod
-    def handler(cls, signal: int, frame: FrameType | None):
+    def handler(cls, signal: int, frame: Optional[FrameType]):
         raise cls(signal, frame)
 
 

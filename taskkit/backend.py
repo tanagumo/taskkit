@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import Protocol, Optional
 
 from .task import Task
 from .stage import StageInfo
@@ -54,11 +54,11 @@ class Backend(Protocol):
         """Get tasks in the queue"""
         ...
 
-    def lookup_tasks(self, *task_ids: str) -> dict[str, Task | None]:
+    def lookup_tasks(self, *task_ids: str) -> dict[str, Optional[Task]]:
         """Lookup tasks by given ids"""
         ...
 
-    def assign_task(self, group: str, worker_id: str) -> Task | None:
+    def assign_task(self, group: str, worker_id: str) -> Optional[Task]:
         """Take a task from the queue and assign it for the worker and put on
         the stage."""
         ...
@@ -89,8 +89,8 @@ class Backend(Protocol):
         ...
 
     def get_done_task_ids(self,
-                          since: float | None,
-                          until: float | None,
+                          since: Optional[float],
+                          until: Optional[float],
                           limit: int) -> list[str]:
         """Get done task ids matching given timestamp range
 
@@ -125,7 +125,7 @@ class Backend(Protocol):
         """Persist given data for the scheduler and put tasks"""
         ...
 
-    def get_scheduler_state(self, name: str) -> bytes | None:
+    def get_scheduler_state(self, name: str) -> Optional[bytes]:
         """Get data for the scheduler"""
         ...
 
