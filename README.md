@@ -84,7 +84,6 @@ kit = make_kit(redis, Handler())
 
 
 ```python
-from redis.client import Redis
 from taskkit.impl.django import make_kit
 
 kit = make_kit(Handler())
