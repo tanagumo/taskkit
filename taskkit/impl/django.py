@@ -1,6 +1,6 @@
 import sys
 import time
-from typing import Generator
+from typing import Generator, Optional
 
 from django.db.transaction import atomic, Atomic
 from django.db.utils import OperationalError, IntegrityError
@@ -37,7 +37,7 @@ class DjangoLock(Lock):
         self.target = target
         self.acquired = False
         self.ensured = False
-        self.atomic: Atomic | None = None
+        self.atomic: Optional[Atomic] = None
 
     def acquire(self) -> bool:
         if self.acquired:
@@ -115,14 +115,14 @@ class DjangoBackend(Backend):
             .order_by('due')[:limit]
         ]
 
-    def lookup_tasks(self, *task_ids: str) -> dict[str, Task | None]:
+    def lookup_tasks(self, *task_ids: str) -> dict[str, Optional[Task]]:
         tasks = {
             t.pk: self._db_to_task(t)
             for t in TaskkitTask.objects.filter(pk__in=task_ids)
         }
         return {tid: tasks.get(tid) for tid in task_ids}
 
-    def assign_task(self, group: str, worker_id: str) -> Task | None:
+    def assign_task(self, group: str, worker_id: str) -> Optional[Task]:
         for pk in TaskkitTask.objects\
                 .filter(began__isnull=True, group=group, due__lt=cur_ts())\
                 .values_list('pk', flat=True)\
@@ -186,8 +186,8 @@ class DjangoBackend(Backend):
             raise NotFound
 
     def get_done_task_ids(self,
-                          since: float | None,
-                          until: float | None,
+                          since: Optional[float],
+                          until: Optional[float],
                           limit: int) -> list[str]:
         return list(
             TaskkitTask.objects
@@ -243,7 +243,7 @@ class DjangoBackend(Backend):
                 TaskkitSchedulerState.objects.create(id=name, data=data)
             self.put_tasks(*tasks)
 
-    def get_scheduler_state(self, name: str) -> bytes | None:
+    def get_scheduler_state(self, name: str) -> Optional[bytes]:
         return TaskkitSchedulerState.objects\
             .filter(pk=name)\
             .values_list('data', flat=True)\

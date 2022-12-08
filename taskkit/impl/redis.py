@@ -1,5 +1,5 @@
 import json
-from typing import Generator
+from typing import Generator, Optional
 
 from redis.client import Redis, Pipeline
 from redis.exceptions import LockError
@@ -140,7 +140,7 @@ class RedisBackend(Backend):
         tasks = self.lookup_tasks(*task_ids)
         return [t for tid in task_ids if (t := tasks.get(tid))]
 
-    def lookup_tasks(self, *task_ids: str) -> dict[str, Task | None]:
+    def lookup_tasks(self, *task_ids: str) -> dict[str, Optional[Task]]:
         if not task_ids:
             return dict()
 
@@ -153,7 +153,7 @@ class RedisBackend(Backend):
             for tid, i, d in zip(task_ids, info, data)
         }
 
-    def assign_task(self, group: str, worker_id: str) -> Task | None:
+    def assign_task(self, group: str, worker_id: str) -> Optional[Task]:
         def _pop(pipe):
             ret: list[tuple[bytes, float]] =\
                 pipe.zrange(self.queue_key(group), 0, 0, withscores=True)
@@ -238,8 +238,8 @@ class RedisBackend(Backend):
         raise NoResult(task)
 
     def get_done_task_ids(self,
-                          since: float | None,
-                          until: float | None,
+                          since: Optional[float],
+                          until: Optional[float],
                           limit: int) -> list[str]:
         return [
             v.decode() for v in self.redis.zrangebyscore(
@@ -287,7 +287,7 @@ class RedisBackend(Backend):
             self._put_tasks(pipe, *tasks)
             pipe.execute()
 
-    def get_scheduler_state(self, name: str) -> bytes | None:
+    def get_scheduler_state(self, name: str) -> Optional[bytes]:
         return self.redis.get(self.scheduler_data_key(name))
 
     def destroy_all(self):

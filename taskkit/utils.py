@@ -1,7 +1,7 @@
 from datetime import datetime, tzinfo
 from logging import getLogger
 from time import time
-from typing import overload
+from typing import overload, Optional, Union
 
 
 logger = getLogger('taskkit')
@@ -19,16 +19,16 @@ cur_ts = time
 
 
 @overload
-def as_ts(value: datetime | float) -> float:
+def as_ts(value: Union[datetime, float]) -> float:
     ...
 
 
 @overload
-def as_ts(value: datetime | float | None) -> float | None:
+def as_ts(value: Union[datetime, float, None]) -> Optional[float]:
     ...
 
 
-def as_ts(value: datetime | float | None) -> float | None:
+def as_ts(value: Union[datetime, float, None]) -> Optional[float]:
     if value is None:
         return None
     if isinstance(value, datetime):

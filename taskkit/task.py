@@ -1,6 +1,6 @@
 from dataclasses import dataclass, fields
 from datetime import datetime, timezone
-from typing import Any, Protocol
+from typing import Any, Protocol, Optional, Union
 from uuid import uuid4
 
 from .utils import cur_ts, as_ts, from_ts, local_tz
@@ -16,7 +16,7 @@ class Task:
     data: bytes
     due: float
     created: float
-    scheduled: float | None
+    scheduled: Optional[float]
     retry_count: int
     ttl: float
 
@@ -25,8 +25,8 @@ class Task:
              group: str,
              name: str,
              data: bytes,
-             due: datetime | float | None = None,
-             scheduled: datetime | float | None = None,
+             due: Union[datetime, float, None] = None,
+             scheduled: Union[datetime, float, None] = None,
              ttl: float = DEFAULT_TASK_TTL) -> 'Task':
         created = cur_ts()
         return cls(id=cls.make_id(group),
@@ -42,13 +42,13 @@ class Task:
     def group(self) -> str:
         return self.get_group_from_id(self.id)
 
-    def due_dt(self, tzinfo: timezone | None = None) -> datetime:
+    def due_dt(self, tzinfo: Optional[timezone] = None) -> datetime:
         return from_ts(self.due, tzinfo or local_tz())
 
-    def created_dt(self, tzinfo: timezone | None = None) -> datetime:
+    def created_dt(self, tzinfo: Optional[timezone] = None) -> datetime:
         return from_ts(self.created, tzinfo or local_tz())
 
-    def scheduled_dt(self, tzinfo: timezone | None = None) -> datetime | None:
+    def scheduled_dt(self, tzinfo: Optional[timezone] = None) -> Optional[datetime]:
         return from_ts(self.scheduled, tzinfo or local_tz())\
             if self.scheduled is not None else None
 
@@ -106,7 +106,7 @@ class TaskHandler(Protocol):
 
     def get_retry_interval(self,
                            task: Task,
-                           exception: Exception) -> float | None:
+                           exception: Exception) -> Optional[float]:
         """Return interval in seconds if you want to retry the failed task.
 
         This method will be called if the handle method raises exceptions. You

@@ -2,7 +2,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from enum import Enum
 from time import time, sleep
-from typing import Generic, TypeVar, overload, cast
+from typing import Generic, TypeVar, overload, cast, Optional, Union
 
 from .backend import Backend, NoResult
 from .task import TaskHandler
@@ -57,14 +57,14 @@ class Result(Generic[T]):
                  backend: Backend,
                  handler: TaskHandler,
                  task_id: str,
-                 result: T | _Sentinel = _Sentinel.obj):
+                 result: Union[T, _Sentinel] = _Sentinel.obj):
         self.backend = backend
         self.handler = handler
         self.task_id = task_id
         self._result = result
 
     def get(self,
-            timeout: float | None = None,
+            timeout: Optional[float] = None,
             avoid_assertion: bool = False) -> T:
         if not avoid_assertion:
             prevent, reason = _prevent_to_wait_result.get()

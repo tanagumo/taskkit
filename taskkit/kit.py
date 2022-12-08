@@ -1,6 +1,6 @@
 import time
 from datetime import datetime, tzinfo
-from typing import Any, Callable, Mapping, Sequence, TypeAlias, TypedDict
+from typing import Any, Callable, Mapping, Sequence, TypedDict, Optional, Union
 
 from .backend import Backend
 from .event import EventBridge, Shutdown, Pause, Resume
@@ -21,9 +21,9 @@ class ScheduleEntryDict(TypedDict):
     data: Any
 
 
-ScheduleEntryCompat: TypeAlias = ScheduleEntry | ScheduleEntryDict
-ScheduleEntriesCompat: TypeAlias = Sequence[ScheduleEntryCompat]
-ScheduleEntriesCompatMapping: TypeAlias = Mapping[str, ScheduleEntriesCompat]
+ScheduleEntryCompat = Union[ScheduleEntry, ScheduleEntryDict]
+ScheduleEntriesCompat = Sequence[ScheduleEntryCompat]
+ScheduleEntriesCompatMapping = Mapping[str, ScheduleEntriesCompat]
 
 
 class Kit:
@@ -40,7 +40,7 @@ class Kit:
               num_processes: int,
               num_worker_threads_per_group: dict[str, int],
               schedule_entries: ScheduleEntriesCompatMapping = {},
-              tzinfo: tzinfo | None = None,
+              tzinfo: Optional[tzinfo] = None,
               should_restart: Callable[[TaskkitProcess], bool] = lambda _: False):
 
         schedule_entries = self._ensure_schedule_entries(schedule_entries)
@@ -79,7 +79,7 @@ class Kit:
                         num_processes: int,
                         num_worker_threads_per_group: dict[str, int],
                         schedule_entries: ScheduleEntriesCompatMapping = {},
-                        tzinfo: tzinfo | None = None,
+                        tzinfo: Optional[tzinfo] = None,
                         daemon: bool = True) -> list[TaskkitProcess]:
         schedule_entries = self._ensure_schedule_entries(schedule_entries)
         return [
@@ -93,7 +93,7 @@ class Kit:
     def _start_process(self,
                        num_worker_threads_per_group: dict[str, int],
                        schedule_entries: dict[str, list[ScheduleEntry]] = {},
-                       tzinfo: tzinfo | None = None,
+                       tzinfo: Optional[tzinfo] = None,
                        daemon: bool = True) -> TaskkitProcess:
         p = TaskkitProcess(
             num_worker_threads_per_group=num_worker_threads_per_group,
@@ -114,7 +114,7 @@ class Kit:
             for k, v in entries.items()
         }
 
-    def _ensure_schedule_entry(self, entry: ScheduleEntry | ScheduleEntryDict)\
+    def _ensure_schedule_entry(self, entry: ScheduleEntryCompat)\
             -> ScheduleEntry:
         if isinstance(entry, dict):
             return ScheduleEntry(
@@ -131,7 +131,7 @@ class Kit:
                       group: str,
                       name: str,
                       data: Any,
-                      due: datetime | None = None,
+                      due: Optional[datetime] = None,
                       ttl: float = DEFAULT_TASK_TTL,
                       eager: bool = False) -> Result[Any]:
         encoded = self.handler.encode_data(group, name, data)
@@ -141,21 +141,21 @@ class Kit:
         self.backend.put_tasks(task)
         return Result(self.backend, self.handler, task.id)
 
-    def send_shutdown_event(self, groups: set[str] | None = None):
+    def send_shutdown_event(self, groups: Optional[set[str]] = None):
         event: Shutdown = {
             'name': 'shutdown',
             'groups': None if groups is None else list(groups),
         }
         self.bridge.send_event(event)
 
-    def send_pause_event(self, groups: set[str] | None = None):
+    def send_pause_event(self, groups: Optional[set[str]] = None):
         event: Pause = {
             'name': 'pause',
             'groups': None if groups is None else list(groups),
         }
         self.bridge.send_event(event)
 
-    def send_resume_event(self, groups: set[str] | None = None):
+    def send_resume_event(self, groups: Optional[set[str]] = None):
         event: Resume = {
             'name': 'resume',
             'groups': None if groups is None else list(groups),
