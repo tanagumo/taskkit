@@ -115,7 +115,7 @@ class Backend(Protocol):
         ...
 
     def get_lock(self, target: str) -> Lock:
-        """Get a lock object for the targer"""
+        """Get a lock object for the target"""
         ...
 
     def persist_scheduler_state_and_put_tasks(self,
