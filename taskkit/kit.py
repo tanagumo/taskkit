@@ -141,6 +141,9 @@ class Kit:
         self.backend.put_tasks(task)
         return Result(self.backend, self.handler, task.id)
 
+    def get_result(self, task_id: str) -> Result:
+        return Result(self.backend, self.handler, task_id)
+
     def send_shutdown_event(self, groups: Optional[set[str]] = None):
         event: Shutdown = {
             'name': 'shutdown',
