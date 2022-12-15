@@ -152,13 +152,15 @@ class Scheduler(Service):
         """It schedules entries and returns time interval indicating when
         should this method be called next time."""
 
+        start = self._round(cur_ts())
+
         if self.entries and self.lock.acquire():
             try:
                 self._schedule_entries()
             finally:
                 self.lock.release()
 
-        return self._round(SCHEDULE_POINT_INTERVAL)
+        return max(0, (start + SCHEDULE_POINT_INTERVAL) - cur_ts())
 
     def _schedule_entries(self):
         state = self._get_state()
