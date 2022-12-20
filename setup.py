@@ -26,4 +26,7 @@ setuptools.setup(
     packages=setuptools.find_packages(exclude=["tests"]),
     package_dir={"taskkit": "taskkit"},
     python_requires=">=3.9",
+    install_requires=[
+        'typing-extensions>=4.0.0',
+    ]
 )
