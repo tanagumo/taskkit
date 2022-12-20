@@ -28,7 +28,7 @@ class InitiateTaskArgs(TypedDict):
     group: str
     name: str
     data: Any
-    due: NotRequired[datetime | None]
+    due: NotRequired[Optional[datetime]]
     ttl: NotRequired[float]
     eager: NotRequired[bool]
 
