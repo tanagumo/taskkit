@@ -2,6 +2,8 @@ import time
 from datetime import datetime, tzinfo
 from typing import Any, Callable, Mapping, Sequence, TypedDict, Optional, Union
 
+from typing_extensions import NotRequired
+
 from .backend import Backend
 from .event import EventBridge, Shutdown, Pause, Resume
 from .process import TaskkitProcess
@@ -19,6 +21,7 @@ class ScheduleEntryDict(TypedDict):
     group: str
     name: str
     data: Any
+    result_ttl: NotRequired[Optional[float]]
 
 
 ScheduleEntryCompat = Union[ScheduleEntry, ScheduleEntryDict]
@@ -124,6 +127,7 @@ class Kit:
                 name=entry['name'],
                 data=self.handler.encode_data(
                     entry['group'], entry['name'], entry['data']),
+                result_ttl=entry.get('result_ttl'),
             )
         return entry
 

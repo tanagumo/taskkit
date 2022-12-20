@@ -5,7 +5,7 @@ from typing import Protocol, Literal, Optional, Union
 
 from .backend import Backend
 from .services import Service
-from .task import Task
+from .task import Task, DEFAULT_TASK_TTL
 from .utils import cur_ts, from_ts, as_ts, logger
 
 
@@ -123,6 +123,7 @@ class ScheduleEntry:
     group: str
     name: str
     data: bytes
+    result_ttl: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -184,7 +185,8 @@ class Scheduler(Service):
                     [from_ts(sp, tz) for sp in schedule_points], last):
                 new_state.last_scheduled_at[e.key] = as_ts(sp)
                 task = Task.init(group=e.group, name=e.name, data=e.data,
-                                 due=sp, scheduled=sp)
+                                 due=sp, scheduled=sp, ttl=DEFAULT_TASK_TTL
+                                 if e.result_ttl is None else e.result_ttl)
                 tasks.append(task)
                 logger.info(f'schedule task at {sp} ({task.id}: {task.name})')
 
