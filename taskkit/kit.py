@@ -24,6 +24,15 @@ class ScheduleEntryDict(TypedDict):
     result_ttl: NotRequired[Optional[float]]
 
 
+class InitiateTaskArgs(TypedDict):
+    group: str
+    name: str
+    data: Any
+    due: NotRequired[datetime | None]
+    ttl: NotRequired[float]
+    eager: NotRequired[bool]
+
+
 ScheduleEntryCompat = Union[ScheduleEntry, ScheduleEntryDict]
 ScheduleEntriesCompat = Sequence[ScheduleEntryCompat]
 ScheduleEntriesCompatMapping = Mapping[str, ScheduleEntriesCompat]
@@ -138,12 +147,37 @@ class Kit:
                       due: Optional[datetime] = None,
                       ttl: float = DEFAULT_TASK_TTL,
                       eager: bool = False) -> Result[Any]:
-        encoded = self.handler.encode_data(group, name, data)
-        task = Task.init(group, name=name, data=encoded, due=due, ttl=ttl)
-        if eager:
-            return self.eager_worker.handle_task(task)
-        self.backend.put_tasks(task)
-        return Result(self.backend, self.handler, task.id)
+        return self.initiate_tasks({
+            'group': group,
+            'name': name,
+            'data': data,
+            'due': due,
+            'ttl': ttl,
+            'eager': eager,
+        })[0]
+
+    def initiate_tasks(self, *args: InitiateTaskArgs) -> list[Result[Any]]:
+        tasks: list[Task] = []
+        results: list[Result[Any]] = []
+
+        for item in args:
+            group = item['group']
+            name = item['name']
+            data = item['data']
+            due = item.get('due')
+            ttl = item.get('ttl', DEFAULT_TASK_TTL)
+
+            encoded = self.handler.encode_data(group, name, data)
+            task = Task.init(group, name=name, data=encoded, due=due, ttl=ttl)
+            if item.get('eager'):
+                results.append(self.eager_worker.handle_task(task))
+            else:
+                results.append(Result(self.backend, self.handler, task.id))
+                tasks.append(task)
+
+        if tasks:
+            self.backend.put_tasks(*tasks)
+        return results
 
     def get_result(self, task_id: str) -> Result:
         return Result(self.backend, self.handler, task_id)
