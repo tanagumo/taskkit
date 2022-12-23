@@ -156,7 +156,7 @@ class Kit:
             'eager': eager,
         })[0]
 
-    def initiate_tasks(self, *args: Task | tuple[Task, bool] | InitiateTaskArgs) -> list[Result[Any]]:
+    def initiate_tasks(self, *args: Union[Task, tuple[Task, bool], InitiateTaskArgs]) -> list[Result[Any]]:
         tasks: list[Task] = []
         results: list[Result[Any]] = []
 
