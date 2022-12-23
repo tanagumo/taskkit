@@ -28,7 +28,7 @@ class InitiateTaskArgs(TypedDict):
     group: str
     name: str
     data: Any
-    due: NotRequired[Optional[datetime]]
+    due: NotRequired[Union[datetime, float, None]]
     ttl: NotRequired[float]
     eager: NotRequired[bool]
 
@@ -144,7 +144,7 @@ class Kit:
                       group: str,
                       name: str,
                       data: Any,
-                      due: Optional[datetime] = None,
+                      due: Union[datetime, float, None] = None,
                       ttl: float = DEFAULT_TASK_TTL,
                       eager: bool = False) -> Result[Any]:
         return self.initiate_tasks({
@@ -156,20 +156,28 @@ class Kit:
             'eager': eager,
         })[0]
 
-    def initiate_tasks(self, *args: InitiateTaskArgs) -> list[Result[Any]]:
+    def initiate_tasks(self, *args: Union[Task, tuple[Task, bool], InitiateTaskArgs]) -> list[Result[Any]]:
         tasks: list[Task] = []
         results: list[Result[Any]] = []
 
         for item in args:
-            group = item['group']
-            name = item['name']
-            data = item['data']
-            due = item.get('due')
-            ttl = item.get('ttl', DEFAULT_TASK_TTL)
+            if isinstance(item, Task):
+                task = item
+                eager = False
+            elif isinstance(item, tuple):
+                task, eager = item
+            else:
+                group = item['group']
+                name = item['name']
+                data = item['data']
+                due = item.get('due')
+                ttl = item.get('ttl', DEFAULT_TASK_TTL)
 
-            encoded = self.handler.encode_data(group, name, data)
-            task = Task.init(group, name=name, data=encoded, due=due, ttl=ttl)
-            if item.get('eager'):
+                encoded = self.handler.encode_data(group, name, data)
+                task = Task.init(group, name=name, data=encoded, due=due, ttl=ttl)
+                eager = item.get('eager') or False
+
+            if eager:
                 results.append(self.eager_worker.handle_task(task))
             else:
                 results.append(Result(self.backend, self.handler, task.id))
