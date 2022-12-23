@@ -156,20 +156,28 @@ class Kit:
             'eager': eager,
         })[0]
 
-    def initiate_tasks(self, *args: InitiateTaskArgs) -> list[Result[Any]]:
+    def initiate_tasks(self, *args: Task | tuple[Task, bool] | InitiateTaskArgs) -> list[Result[Any]]:
         tasks: list[Task] = []
         results: list[Result[Any]] = []
 
         for item in args:
-            group = item['group']
-            name = item['name']
-            data = item['data']
-            due = item.get('due')
-            ttl = item.get('ttl', DEFAULT_TASK_TTL)
+            if isinstance(item, Task):
+                task = item
+                eager = False
+            elif isinstance(item, tuple):
+                task, eager = item
+            else:
+                group = item['group']
+                name = item['name']
+                data = item['data']
+                due = item.get('due')
+                ttl = item.get('ttl', DEFAULT_TASK_TTL)
 
-            encoded = self.handler.encode_data(group, name, data)
-            task = Task.init(group, name=name, data=encoded, due=due, ttl=ttl)
-            if item.get('eager'):
+                encoded = self.handler.encode_data(group, name, data)
+                task = Task.init(group, name=name, data=encoded, due=due, ttl=ttl)
+                eager = item.get('eager') or False
+
+            if eager:
                 results.append(self.eager_worker.handle_task(task))
             else:
                 results.append(Result(self.backend, self.handler, task.id))
