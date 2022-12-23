@@ -28,7 +28,7 @@ class InitiateTaskArgs(TypedDict):
     group: str
     name: str
     data: Any
-    due: NotRequired[Optional[datetime]]
+    due: NotRequired[Union[datetime, float, None]]
     ttl: NotRequired[float]
     eager: NotRequired[bool]
 
@@ -144,7 +144,7 @@ class Kit:
                       group: str,
                       name: str,
                       data: Any,
-                      due: Optional[datetime] = None,
+                      due: Union[datetime, float, None] = None,
                       ttl: float = DEFAULT_TASK_TTL,
                       eager: bool = False) -> Result[Any]:
         return self.initiate_tasks({
