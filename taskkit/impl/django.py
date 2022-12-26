@@ -79,6 +79,8 @@ class DjangoLock(Lock):
 
 
 class DjangoBackend(Backend):
+    _last_worker_count: Optional[int] = None
+
     def set_worker_ttl(self, worker_ids: set[str], expires_at: float):
         if not worker_ids:
             return
@@ -90,10 +92,12 @@ class DjangoBackend(Backend):
         TaskkitWorker.objects.bulk_update(workers, ['expires'])
 
     def get_workers(self) -> list[tuple[str, float]]:
-        return [
+        workers = [
             (w.pk, w.expires)
             for w in TaskkitWorker.objects.order_by('expires')
         ]
+        self._last_worker_count = len(workers)
+        return workers
 
     def purge_workers(self, worker_ids: set[str]):
         if not worker_ids:
@@ -126,7 +130,7 @@ class DjangoBackend(Backend):
         for pk in TaskkitTask.objects\
                 .filter(began__isnull=True, group=group, due__lt=cur_ts())\
                 .values_list('pk', flat=True)\
-                .order_by('due')[:50]:
+                .order_by('due')[:max(self._last_worker_count or 0, 100)]:
             with atomic():
                 try:
                     db_task = TaskkitTask.objects\
