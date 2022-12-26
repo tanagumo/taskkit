@@ -48,7 +48,7 @@ class DjangoLock(Lock):
             try:
                 with atomic():
                     TaskkitLock.objects\
-                        .select_for_update(nowait=True)\
+                        .select_for_update(skip_locked=True)\
                         .get(pk=self.target)
             except TaskkitLock.DoesNotExist:
                 try:
@@ -62,7 +62,7 @@ class DjangoLock(Lock):
         self.atomic.__enter__()
         try:
             TaskkitLock.objects\
-                .select_for_update(nowait=True)\
+                .select_for_update(skip_locked=True)\
                 .get(pk=self.target)
             self.acquired = True
             return True
@@ -130,7 +130,7 @@ class DjangoBackend(Backend):
             with atomic():
                 try:
                     db_task = TaskkitTask.objects\
-                        .select_for_update(nowait=True)\
+                        .select_for_update(skip_locked=True)\
                         .get(pk=pk)
                     if db_task.began is None:
                         db_task.assignee_worker_id = worker_id
