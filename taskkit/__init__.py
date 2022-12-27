@@ -1,6 +1,6 @@
 from .backend import Lock, NotFound, NoResult, Failed, Backend  # noqa
 from .event import ControlEvent, EventBridge  # noqa
-from .kit import Kit, ScheduleEntryDict, ScheduleEntryCompat, ScheduleEntriesCompat, ScheduleEntriesCompatMapping  # noqa
+from .kit import Kit, InitiateTaskArgs, ScheduleEntryDict, ScheduleEntryCompat, ScheduleEntriesCompat, ScheduleEntriesCompatMapping  # noqa
 from .process import TaskkitProcess  # noqa
 from .result import Result, ResultGetTimedOut  # noqa
 from .scheduler import Schedule, DuplicationPolicy, OnlyEarliest, OnlyLatest, RegularSchedule, ScheduleEntry  # noqa
