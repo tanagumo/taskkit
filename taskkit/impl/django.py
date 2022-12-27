@@ -79,8 +79,6 @@ class DjangoLock(Lock):
 
 
 class DjangoBackend(Backend):
-    _last_worker_count: Optional[int] = None
-
     def set_worker_ttl(self, worker_ids: set[str], expires_at: float):
         if not worker_ids:
             return
@@ -92,12 +90,10 @@ class DjangoBackend(Backend):
         TaskkitWorker.objects.bulk_update(workers, ['expires'])
 
     def get_workers(self) -> list[tuple[str, float]]:
-        workers = [
+        return [
             (w.pk, w.expires)
             for w in TaskkitWorker.objects.order_by('expires')
         ]
-        self._last_worker_count = len(workers)
-        return workers
 
     def purge_workers(self, worker_ids: set[str]):
         if not worker_ids:
@@ -127,23 +123,29 @@ class DjangoBackend(Backend):
         return {tid: tasks.get(tid) for tid in task_ids}
 
     def assign_task(self, group: str, worker_id: str) -> Optional[Task]:
-        for pk in TaskkitTask.objects\
-                .filter(began__isnull=True, group=group, due__lt=cur_ts())\
-                .values_list('pk', flat=True)\
-                .order_by('due')[:max(self._last_worker_count or 0, 100)]:
-            with atomic():
-                try:
-                    db_task = TaskkitTask.objects\
-                        .select_for_update(skip_locked=True)\
-                        .get(pk=pk)
-                    if db_task.began is None:
-                        db_task.assignee_worker_id = worker_id
-                        db_task.began = cur_ts()
-                        db_task.save()
-                        return self._db_to_task(db_task)
-                except (OperationalError, TaskkitTask.DoesNotExist):
-                    pass
-        return None
+        n = 32
+        while True:
+            pks = list(
+                TaskkitTask.objects
+                .filter(began__isnull=True, group=group, due__lt=cur_ts())
+                .values_list('pk', flat=True)
+                .order_by('due')[:n])
+            for pk in pks:
+                with atomic():
+                    try:
+                        db_task = TaskkitTask.objects\
+                            .select_for_update(skip_locked=True)\
+                            .get(pk=pk)
+                        if db_task.began is None:
+                            db_task.assignee_worker_id = worker_id
+                            db_task.began = cur_ts()
+                            db_task.save()
+                            return self._db_to_task(db_task)
+                    except (OperationalError, TaskkitTask.DoesNotExist):
+                        pass
+            if len(pks) < n:
+                return None
+            n *= 2
 
     def discard_tasks(self, *task_ids: str):
         TaskkitTask.objects.filter(pk__in=task_ids).delete()
