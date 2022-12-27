@@ -123,23 +123,29 @@ class DjangoBackend(Backend):
         return {tid: tasks.get(tid) for tid in task_ids}
 
     def assign_task(self, group: str, worker_id: str) -> Optional[Task]:
-        for pk in TaskkitTask.objects\
-                .filter(began__isnull=True, group=group, due__lt=cur_ts())\
-                .values_list('pk', flat=True)\
-                .order_by('due')[:50]:
-            with atomic():
-                try:
-                    db_task = TaskkitTask.objects\
-                        .select_for_update(skip_locked=True)\
-                        .get(pk=pk)
-                    if db_task.began is None:
-                        db_task.assignee_worker_id = worker_id
-                        db_task.began = cur_ts()
-                        db_task.save()
-                        return self._db_to_task(db_task)
-                except (OperationalError, TaskkitTask.DoesNotExist):
-                    pass
-        return None
+        n = 32
+        while True:
+            pks = list(
+                TaskkitTask.objects
+                .filter(began__isnull=True, group=group, due__lt=cur_ts())
+                .values_list('pk', flat=True)
+                .order_by('due')[:n])
+            for pk in pks:
+                with atomic():
+                    try:
+                        db_task = TaskkitTask.objects\
+                            .select_for_update(skip_locked=True)\
+                            .get(pk=pk)
+                        if db_task.began is None:
+                            db_task.assignee_worker_id = worker_id
+                            db_task.began = cur_ts()
+                            db_task.save()
+                            return self._db_to_task(db_task)
+                    except (OperationalError, TaskkitTask.DoesNotExist):
+                        pass
+            if len(pks) < n:
+                return None
+            n *= 2
 
     def discard_tasks(self, *task_ids: str):
         TaskkitTask.objects.filter(pk__in=task_ids).delete()
