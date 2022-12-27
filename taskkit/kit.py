@@ -15,15 +15,6 @@ from .utils import local_tz
 from .worker import EagerWorker
 
 
-class ScheduleEntryDict(TypedDict):
-    key: str
-    schedule: Schedule
-    group: str
-    name: str
-    data: Any
-    result_ttl: NotRequired[Optional[float]]
-
-
 class InitiateTaskArgs(TypedDict):
     group: str
     name: str
@@ -31,6 +22,15 @@ class InitiateTaskArgs(TypedDict):
     due: NotRequired[Union[datetime, float, None]]
     ttl: NotRequired[float]
     eager: NotRequired[bool]
+
+
+class ScheduleEntryDict(TypedDict):
+    key: str
+    schedule: Schedule
+    group: str
+    name: str
+    data: Any
+    result_ttl: NotRequired[Optional[float]]
 
 
 ScheduleEntryCompat = Union[ScheduleEntry, ScheduleEntryDict]
