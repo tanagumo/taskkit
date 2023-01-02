@@ -6,7 +6,7 @@ from django.db.transaction import atomic, Atomic
 from django.db.utils import OperationalError, IntegrityError
 
 from ..backend import Backend, Lock, NotFound, NoResult, Failed
-from ..contrib.django.models import TaskkitControlEvent, TaskkitLock, TaskkitWorker, TaskkitTask, TaskkitSchedulerState
+from ..contrib.django.models import TaskkitControlEvent, TaskkitLock, TaskkitWorker, TaskkitTask, TaskkitTaskQueue, TaskkitSchedulerState
 from ..event import EventBridge, ControlEvent, encode_control_event, decode_control_event
 from ..kit import Kit
 from ..stage import StageInfo
@@ -79,6 +79,9 @@ class DjangoLock(Lock):
 
 
 class DjangoBackend(Backend):
+    def __init__(self, use_old_queue: bool):
+        self.use_old_queue = use_old_queue
+
     def set_worker_ttl(self, worker_ids: set[str], expires_at: float):
         if not worker_ids:
             return
@@ -107,6 +110,9 @@ class DjangoBackend(Backend):
         with atomic():
             self.discard_tasks(*[t.pk for t in objects])
             TaskkitTask.objects.bulk_create(objects, ignore_conflicts=True)
+            TaskkitTaskQueue.objects.bulk_create([
+                self._db_task_to_queue(t) for t in objects
+            ], ignore_conflicts=True)
 
     def get_queued_tasks(self, group: str, limit: int) -> list[Task]:
         return [
@@ -123,6 +129,24 @@ class DjangoBackend(Backend):
         return {tid: tasks.get(tid) for tid in task_ids}
 
     def assign_task(self, group: str, worker_id: str) -> Optional[Task]:
+        if self.use_old_queue:
+            return self._assign_task(group, worker_id)
+
+        n = 32
+        while True:
+            pks = list(
+                TaskkitTaskQueue.objects
+                .filter(group=group, due__lt=cur_ts())
+                .values_list('pk', flat=True)
+                .order_by('due')[:n])
+            for pk in pks:
+                if (task := self._assign(pk, worker_id)):
+                    return task
+            if len(pks) < n:
+                return None
+            n *= 2
+
+    def _assign_task(self, group: str, worker_id: str) -> Optional[Task]:
         n = 32
         while True:
             pks = list(
@@ -131,24 +155,31 @@ class DjangoBackend(Backend):
                 .values_list('pk', flat=True)
                 .order_by('due')[:n])
             for pk in pks:
-                with atomic():
-                    try:
-                        db_task = TaskkitTask.objects\
-                            .select_for_update(skip_locked=True)\
-                            .get(pk=pk)
-                        if db_task.began is None:
-                            db_task.assignee_worker_id = worker_id
-                            db_task.began = cur_ts()
-                            db_task.save()
-                            return self._db_to_task(db_task)
-                    except (OperationalError, TaskkitTask.DoesNotExist):
-                        pass
+                if (task := self._assign(pk, worker_id)):
+                    return task
             if len(pks) < n:
                 return None
             n *= 2
 
+    def _assign(self, task_id: str, worker_id: str) -> Optional[Task]:
+        with atomic():
+            try:
+                db_task = TaskkitTask.objects\
+                    .select_for_update(skip_locked=True)\
+                    .get(pk=task_id)
+                if db_task.began is None:
+                    db_task.assignee_worker_id = worker_id
+                    db_task.began = cur_ts()
+                    db_task.save()
+                    TaskkitTaskQueue.objects.filter(id=task_id).delete()
+                    return self._db_to_task(db_task)
+            except (OperationalError, TaskkitTask.DoesNotExist):
+                pass
+        return None
+
     def discard_tasks(self, *task_ids: str):
         TaskkitTask.objects.filter(pk__in=task_ids).delete()
+        TaskkitTaskQueue.objects.filter(pk__in=task_ids).delete()
 
     def succeed(self, task: Task, result: bytes):
         with atomic():
@@ -230,6 +261,7 @@ class DjangoBackend(Backend):
             task.began = None
             task.assignee_worker_id = None
             task.save()
+            self._db_task_to_queue(task).save()
         except TaskkitTask.DoesNotExist:
             pass
 
@@ -292,6 +324,9 @@ class DjangoBackend(Backend):
             disposable=None,
         )
 
+    def _db_task_to_queue(self, t: TaskkitTask) -> TaskkitTaskQueue:
+        return TaskkitTaskQueue(id=t.id, group=t.group, due=t.due)
 
-def make_kit(handler: TaskHandler) -> Kit:
-    return Kit(DjangoBackend(), DjangoEventBridge(), handler)
+
+def make_kit(handler: TaskHandler, use_old_queue: bool = False) -> Kit:
+    return Kit(DjangoBackend(use_old_queue), DjangoEventBridge(), handler)
