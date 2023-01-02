@@ -56,6 +56,19 @@ class TaskkitTask(models.Model):
     disposable: models.FloatField = models.FloatField(null=True, db_index=True)
 
 
+class TaskkitTaskQueue(models.Model):
+    class Meta:
+        db_table = 'taskkit_task_queue'
+        app_label = 'taskkit'
+        index_together = (
+            ('group', 'due'),
+        )
+
+    id: models.CharField = models.CharField(primary_key=True, max_length=255)
+    group: models.CharField = models.CharField(max_length=40)
+    due: models.FloatField = models.FloatField()
+
+
 class TaskkitSchedulerState(models.Model):
     class Meta:
         db_table = 'taskkit_scheduler_state'
