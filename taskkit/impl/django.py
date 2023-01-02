@@ -259,7 +259,6 @@ class DjangoBackend(Backend):
                 .filter(began__isnull=False)\
                 .get(pk=info.task_id)
             task.began = None
-            task.assignee_worker_id = None
             task.save()
             self._db_task_to_queue(task).save()
         except TaskkitTask.DoesNotExist:
