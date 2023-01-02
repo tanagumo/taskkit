@@ -138,7 +138,7 @@ class DjangoBackend(Backend):
         if self.use_old_queue:
             return self._assign_task(group, worker_id)
 
-        n = 32
+        n = 8
         while True:
             pks = list(
                 TaskkitTaskQueue.objects
@@ -153,7 +153,7 @@ class DjangoBackend(Backend):
             n *= 2
 
     def _assign_task(self, group: str, worker_id: str) -> Optional[Task]:
-        n = 32
+        n = 8
         while True:
             pks = list(
                 TaskkitTask.objects
@@ -173,11 +173,11 @@ class DjangoBackend(Backend):
                 db_task = TaskkitTask.objects\
                     .select_for_update(skip_locked=True)\
                     .get(pk=task_id)
+                TaskkitTaskQueue.objects.filter(id=task_id).delete()
                 if db_task.began is None:
                     db_task.assignee_worker_id = worker_id
                     db_task.began = cur_ts()
                     db_task.save()
-                    TaskkitTaskQueue.objects.filter(id=task_id).delete()
                     return self._db_to_task(db_task)
             except (OperationalError, TaskkitTask.DoesNotExist):
                 pass
@@ -265,7 +265,6 @@ class DjangoBackend(Backend):
                 .filter(began__isnull=False)\
                 .get(pk=info.task_id)
             task.began = None
-            task.assignee_worker_id = None
             task.save()
             self._db_task_to_queue(task).save()
         except TaskkitTask.DoesNotExist:
