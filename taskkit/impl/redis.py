@@ -124,8 +124,8 @@ class RedisBackend(Backend):
     def _put_tasks(self, pipe: Pipeline, *_tasks: Task):
         if not _tasks:
             return
+        self._put_task_data(pipe, *_tasks)
         for group, tasks in Task.group_tasks(*_tasks).items():
-            self._put_task_data(pipe, *_tasks)
             pipe.zadd(self.queue_key(group), {t.id: t.due for t in tasks})
 
     def _put_task_data(self, pipe: Pipeline, *tasks: Task):
