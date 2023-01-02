@@ -108,11 +108,17 @@ class DjangoBackend(Backend):
             return
         objects = [self._task_to_db(t) for t in tasks]
         with atomic():
-            self.discard_tasks(*[t.pk for t in objects])
             TaskkitTask.objects.bulk_create(objects, ignore_conflicts=True)
             TaskkitTaskQueue.objects.bulk_create([
                 self._db_task_to_queue(t) for t in objects
             ], ignore_conflicts=True)
+
+    def retry_task(self, task: Task):
+        with atomic():
+            self.discard_tasks(task.id)
+            db_task = self._task_to_db(task)
+            db_task.save()
+            self._db_task_to_queue(db_task).save()
 
     def get_queued_tasks(self, group: str, limit: int) -> list[Task]:
         return [

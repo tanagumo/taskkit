@@ -114,14 +114,18 @@ class RedisBackend(Backend):
             self._put_tasks(pipe, *tasks)
             pipe.execute()
 
+    def retry_task(self, task: Task):
+        with self.redis.pipeline() as pipe:
+            pipe.zrem(self.stage_queue_key(), task.id)
+            pipe.hdel(self.stage_info_key(), task.id)
+            self._put_tasks(pipe, task)
+            pipe.execute()
+
     def _put_tasks(self, pipe: Pipeline, *_tasks: Task):
         if not _tasks:
             return
+        self._put_task_data(pipe, *_tasks)
         for group, tasks in Task.group_tasks(*_tasks).items():
-            task_ids = [t.id for t in tasks]
-            pipe.zrem(self.stage_queue_key(), *task_ids)
-            pipe.hdel(self.stage_info_key(), *task_ids)
-            self._put_task_data(pipe, *_tasks)
             pipe.zadd(self.queue_key(group), {t.id: t.due for t in tasks})
 
     def _put_task_data(self, pipe: Pipeline, *tasks: Task):

@@ -94,7 +94,7 @@ class Worker:
         clone = task.clone_for_retry(interval)
         logger.info(f'[{self.id}] retry n{clone.retry_count} '
                     f'({task.id}: {task.name})')
-        self.backend.put_tasks(clone)
+        self.backend.retry_task(clone)
 
 
 class EagerWorker(Worker):
