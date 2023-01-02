@@ -43,11 +43,11 @@ class Backend(Protocol):
         ...
 
     def put_tasks(self, *tasks: Task):
-        """Put the tasks to the queue
+        """Put the tasks to the queue"""
+        ...
 
-        If there is same task on the stage, it should be removed from the
-        stage first because it will be called when the task should retry.
-        """
+    def retry_task(self, task: Task):
+        """Remove the task from stage and put it to the queue"""
         ...
 
     def get_queued_tasks(self, group: str, limit: int) -> list[Task]:

@@ -121,8 +121,15 @@ class BackendTests(TestCase):
             )
             self.backend.discard_tasks(task_c.id)
 
-        with self.subTest('put_tasks should remove from stage'):
-            self.backend.put_tasks(task_a, task_b)
+        with self.subTest('retry_task'):
+            self.assertEqual(len(self.backend.get_stage_info(limit=10)), 2)
+            self.backend.retry_task(task_a)
+            self.assertEqual(self.backend.get_stage_info(limit=10)[0].task_id, task_b.id)
+            self.assertEqual(
+                self.backend.get_queued_tasks(GROUP, limit=10),
+                [task_a],
+            )
+            self.backend.retry_task(task_b)
             self.assertEqual(self.backend.get_stage_info(limit=10), [])
             self.assertEqual(
                 self.backend.get_queued_tasks(GROUP, limit=10),
