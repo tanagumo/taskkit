@@ -53,6 +53,7 @@ class Kit:
               num_worker_threads_per_group: dict[str, int],
               schedule_entries: ScheduleEntriesCompatMapping = {},
               tzinfo: Optional[tzinfo] = None,
+              polling_interval: Union[dict[str, float], float, None] = None,
               should_restart: Callable[[TaskkitProcess], bool] = lambda _: False):
 
         schedule_entries = self._ensure_schedule_entries(schedule_entries)
@@ -62,6 +63,7 @@ class Kit:
                 num_worker_threads_per_group=num_worker_threads_per_group,
                 schedule_entries=schedule_entries,
                 tzinfo=tzinfo,
+                polling_interval=polling_interval,
                 daemon=True)
 
         processes = [_start() for _ in range(num_processes)]
@@ -92,12 +94,14 @@ class Kit:
                         num_worker_threads_per_group: dict[str, int],
                         schedule_entries: ScheduleEntriesCompatMapping = {},
                         tzinfo: Optional[tzinfo] = None,
+                        polling_interval: Union[dict[str, float], float, None] = None,
                         daemon: bool = True) -> list[TaskkitProcess]:
         schedule_entries = self._ensure_schedule_entries(schedule_entries)
         return [
             self._start_process(num_worker_threads_per_group,
                                 schedule_entries,
                                 tzinfo,
+                                polling_interval,
                                 daemon)
             for _ in range(num_processes)
         ]
@@ -106,6 +110,7 @@ class Kit:
                        num_worker_threads_per_group: dict[str, int],
                        schedule_entries: dict[str, list[ScheduleEntry]] = {},
                        tzinfo: Optional[tzinfo] = None,
+                       polling_interval: Union[dict[str, float], float, None] = None,
                        daemon: bool = True) -> TaskkitProcess:
         p = TaskkitProcess(
             num_worker_threads_per_group=num_worker_threads_per_group,
@@ -114,6 +119,7 @@ class Kit:
             handler=self.handler,
             schedule_entries=schedule_entries,
             tzinfo=tzinfo or local_tz(),
+            polling_interval=polling_interval,
             daemon=daemon)
         p.start()
         return p

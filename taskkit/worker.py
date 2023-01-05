@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from .backend import Backend
 from .result import Result, prevent_to_wait_result, ResultGetPrevented
+from .services import Service
 from .task import Task, TaskHandler, DiscardTask
 from .utils import logger
 
@@ -13,36 +14,41 @@ REASON_TO_PREVENT_WAIT_RESULT =\
     'deadlock. If you can assure that it is safe you can pass '\
     '`avoid_assertion=True` for the `get` method.'
 
-WORKER_TTL_IN_SEC = 10
 
-
-class Worker:
+class Worker(Service):
     def __init__(self,
                  group: str,
                  backend: Backend,
-                 handler: TaskHandler):
+                 handler: TaskHandler,
+                 polling_interval: float = 1):
         self.id = f'wk_{group}_{uuid4().hex}'
         self.group = group
         self.backend = backend
         self.handler = handler
+        self.polling_interval = polling_interval
+        self.paused = False
 
-    def __call__(self) -> bool:
+    def __call__(self) -> float:
         """Pop a task from the queue and handle the task.
 
-        If there is a task to handle then it returns whether if task finished
-        successfully otherwise returns False.
+        If there is a task to handle then it returns zero to indicate that
+        it's next call should be right away otherwise it returns time to wait.
+        If it is paused, it won't handle task and just return the time to wait.
         """
+
+        if self.paused:
+            return 1
 
         try:
             task = self.backend.assign_task(self.group, self.id)
             if task is None:
-                return False
+                return self.polling_interval
             else:
                 self._handle_task(task)
-                return True
+                return 0
         except Exception:
             logger.exception(f'[{self.id}] unexpected exception')
-            return False
+            return 1
 
     def _handle_task(self, task: Task):
         logger.info(f'[{self.id}] handle task ({task.id}: {task.name})')

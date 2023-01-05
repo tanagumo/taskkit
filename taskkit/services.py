@@ -2,7 +2,9 @@ from typing import Protocol, Sequence
 
 from .backend import Backend
 from .utils import cur_ts, logger
-from .worker import WORKER_TTL_IN_SEC
+
+
+WORKER_TTL_IN_SEC = 10
 
 
 class Service(Protocol):

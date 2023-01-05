@@ -1,6 +1,7 @@
 import os
 from datetime import tzinfo
 from multiprocessing import Process, Event
+from typing import Union
 
 from .backend import Backend
 from .event import EventBridge
@@ -21,6 +22,7 @@ class TaskkitProcess(Process):
                  handler: TaskHandler,
                  schedule_entries: dict[str, list[ScheduleEntry]],
                  tzinfo: tzinfo,
+                 polling_interval: Union[dict[str, float], float, None] = None,
                  **kwargs):
         assert all(n >= 0 for n in num_worker_threads_per_group.values()),\
             'All values for num_worker_threads_per_group must be positive int.'
@@ -30,6 +32,20 @@ class TaskkitProcess(Process):
         self.handler = handler
         self.schedule_entries = schedule_entries
         self.tzinfo = tzinfo
+
+        if isinstance(polling_interval, float):
+            polling_interval = {
+                group: polling_interval
+                for group in num_worker_threads_per_group.keys()
+            }
+        elif polling_interval is None:
+            polling_interval = dict()
+
+        self.polling_interval = {
+            group: polling_interval.get(group) or _make_polling_interval(n)
+            for group, n in num_worker_threads_per_group.items()
+        }
+
         self._terminate_event = Event()
         super().__init__(**kwargs)
 
@@ -44,8 +60,11 @@ class TaskkitProcess(Process):
         backend = self.backend
         workers: list[WorkerThread] = []
         for group, n in self.num_worker_threads.items():
-            for _ in range(n):
-                w = WorkerThread(group, backend, self.handler)
+            interval = self.polling_interval[group]
+            for i in range(n):
+                w = WorkerThread(group, backend, self.handler,
+                                 polling_interval=interval,
+                                 initial_delay=interval / n * i)
                 w.start()
                 workers.append(w)
         refresh_ttl = ServiceThread(
@@ -107,3 +126,7 @@ class TaskkitProcess(Process):
             w.join()
         refresh_ttl.should_stop = True
         refresh_ttl.join()
+
+
+def _make_polling_interval(num_threads: int) -> float:
+    return max(1, min(4, num_threads * 0.25))
