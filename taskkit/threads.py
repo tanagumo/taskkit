@@ -36,9 +36,10 @@ class WorkerThread(ServiceThread):
                  group: str,
                  backend: Backend,
                  handler: TaskHandler,
+                 polling_interval: float,
                  **kwargs):
         self.group = group
-        self.worker = Worker(group, backend, handler)
+        self.worker = Worker(group, backend, handler, polling_interval)
         super().__init__(service=self.worker, **kwargs)
 
     @property

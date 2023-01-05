@@ -19,11 +19,13 @@ class Worker(Service):
     def __init__(self,
                  group: str,
                  backend: Backend,
-                 handler: TaskHandler):
+                 handler: TaskHandler,
+                 polling_interval: float = 1):
         self.id = f'wk_{group}_{uuid4().hex}'
         self.group = group
         self.backend = backend
         self.handler = handler
+        self.polling_interval = polling_interval
         self.paused = False
 
     def __call__(self) -> float:
@@ -40,7 +42,7 @@ class Worker(Service):
         try:
             task = self.backend.assign_task(self.group, self.id)
             if task is None:
-                return 1
+                return self.polling_interval
             else:
                 self._handle_task(task)
                 return 0
