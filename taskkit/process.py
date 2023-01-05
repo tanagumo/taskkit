@@ -1,6 +1,7 @@
 import os
 from datetime import tzinfo
 from multiprocessing import Process, Event
+from typing import Union
 
 from .backend import Backend
 from .event import EventBridge
@@ -21,7 +22,7 @@ class TaskkitProcess(Process):
                  handler: TaskHandler,
                  schedule_entries: dict[str, list[ScheduleEntry]],
                  tzinfo: tzinfo,
-                 polling_interval: dict[str, float] | float | None = None,
+                 polling_interval: Union[dict[str, float], float, None] = None,
                  **kwargs):
         assert all(n >= 0 for n in num_worker_threads_per_group.values()),\
             'All values for num_worker_threads_per_group must be positive int.'

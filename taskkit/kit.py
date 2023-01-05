@@ -53,7 +53,7 @@ class Kit:
               num_worker_threads_per_group: dict[str, int],
               schedule_entries: ScheduleEntriesCompatMapping = {},
               tzinfo: Optional[tzinfo] = None,
-              polling_interval: dict[str, float] | float | None = None,
+              polling_interval: Union[dict[str, float], float, None] = None,
               should_restart: Callable[[TaskkitProcess], bool] = lambda _: False):
 
         schedule_entries = self._ensure_schedule_entries(schedule_entries)
@@ -94,7 +94,7 @@ class Kit:
                         num_worker_threads_per_group: dict[str, int],
                         schedule_entries: ScheduleEntriesCompatMapping = {},
                         tzinfo: Optional[tzinfo] = None,
-                        polling_interval: dict[str, float] | float | None = None,
+                        polling_interval: Union[dict[str, float], float, None] = None,
                         daemon: bool = True) -> list[TaskkitProcess]:
         schedule_entries = self._ensure_schedule_entries(schedule_entries)
         return [
@@ -110,7 +110,7 @@ class Kit:
                        num_worker_threads_per_group: dict[str, int],
                        schedule_entries: dict[str, list[ScheduleEntry]] = {},
                        tzinfo: Optional[tzinfo] = None,
-                       polling_interval: dict[str, float] | float | None = None,
+                       polling_interval: Union[dict[str, float], float, None] = None,
                        daemon: bool = True) -> TaskkitProcess:
         p = TaskkitProcess(
             num_worker_threads_per_group=num_worker_threads_per_group,
