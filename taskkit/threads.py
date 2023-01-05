@@ -37,9 +37,11 @@ class WorkerThread(ServiceThread):
                  backend: Backend,
                  handler: TaskHandler,
                  polling_interval: float,
+                 initial_delay: float,
                  **kwargs):
         self.group = group
         self.worker = Worker(group, backend, handler, polling_interval)
+        self.initial_delay = initial_delay
         super().__init__(service=self.worker, **kwargs)
 
     @property
@@ -59,5 +61,6 @@ class WorkerThread(ServiceThread):
 
     def run(self):
         logger.info(f'[{self.id}] worker thread started')
+        time.sleep(self.initial_delay)
         super().run()
         logger.info(f'[{self.id}] worker thread stopped')

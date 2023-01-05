@@ -60,9 +60,10 @@ class TaskkitProcess(Process):
         workers: list[WorkerThread] = []
         for group, n in self.num_worker_threads.items():
             interval = self.polling_interval[group]
-            for _ in range(n):
+            for i in range(n):
                 w = WorkerThread(group, backend, self.handler,
-                                 polling_interval=interval)
+                                 polling_interval=interval,
+                                 initial_delay=interval / n * i)
                 w.start()
                 workers.append(w)
         refresh_ttl = ServiceThread(
