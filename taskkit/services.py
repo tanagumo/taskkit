@@ -4,7 +4,7 @@ from .backend import Backend
 from .utils import cur_ts, logger
 
 
-WORKER_TTL_IN_SEC = 10
+WORKER_TTL_IN_SEC = 15
 
 
 class Service(Protocol):
@@ -36,7 +36,7 @@ class RefreshWorkerLifetime(Service):
         self.backend.set_worker_ttl(
             {w.get_id() for w in self.workers if w.is_alive()},
             cur_ts() + WORKER_TTL_IN_SEC)
-        return 1.0
+        return WORKER_TTL_IN_SEC / 3
 
 
 class PurgeDeadWorkers(Service):
@@ -56,7 +56,7 @@ class PurgeDeadWorkers(Service):
                     self.backend.purge_workers(to_purge)
             finally:
                 self.lock.release()
-        return 10.0
+        return WORKER_TTL_IN_SEC
 
 
 class RestoreAbandonedTasks(Service):
@@ -67,7 +67,7 @@ class RestoreAbandonedTasks(Service):
     def __call__(self) -> float:
         if self.lock.acquire():
             try:
-                stage_info_list = self.backend.get_stage_info(50)
+                stage_info_list = self.backend.get_stage_info(100)
                 now = cur_ts()
                 active_worker_ids = {
                     wid for (wid, ttl) in self.backend.get_workers()
@@ -79,7 +79,7 @@ class RestoreAbandonedTasks(Service):
                         self.backend.restore(stage_info)
             finally:
                 self.lock.release()
-        return 5.0
+        return 15.0
 
 
 class DiscardDisposableTasks(Service):
