@@ -54,15 +54,15 @@ class Kit:
               schedule_entries: ScheduleEntriesCompatMapping = {},
               tzinfo: Optional[tzinfo] = None,
               polling_interval: Union[dict[str, float], float, None] = None,
-              helper_services: bool | Callable[[int], bool] = True,
+              helper_services: Union[bool, Callable[[int], bool]] = True,
               should_restart: Callable[[TaskkitProcess], bool] = lambda _: False):
 
-        schedule_entries = self._ensure_schedule_entries(schedule_entries)
+        _schedule_entries = self._ensure_schedule_entries(schedule_entries)
 
         def _start(index: int):
             return self._start_process(
                 num_worker_threads_per_group=num_worker_threads_per_group,
-                schedule_entries=schedule_entries,
+                schedule_entries=_schedule_entries,
                 tzinfo=tzinfo,
                 polling_interval=polling_interval,
                 helper_services=helper_services
@@ -99,7 +99,7 @@ class Kit:
                         schedule_entries: ScheduleEntriesCompatMapping = {},
                         tzinfo: Optional[tzinfo] = None,
                         polling_interval: Union[dict[str, float], float, None] = None,
-                        helper_services: bool | Callable[[int], bool] = True,
+                        helper_services: Union[bool, Callable[[int], bool]] = True,
                         daemon: bool = True) -> list[TaskkitProcess]:
         schedule_entries = self._ensure_schedule_entries(schedule_entries)
         return [
