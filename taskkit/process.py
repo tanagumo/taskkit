@@ -23,6 +23,7 @@ class TaskkitProcess(Process):
                  schedule_entries: dict[str, list[ScheduleEntry]],
                  tzinfo: tzinfo,
                  polling_interval: Union[dict[str, float], float, None] = None,
+                 helper_services: bool = True,
                  **kwargs):
         assert all(n >= 0 for n in num_worker_threads_per_group.values()),\
             'All values for num_worker_threads_per_group must be positive int.'
@@ -45,6 +46,8 @@ class TaskkitProcess(Process):
             group: polling_interval.get(group) or _make_polling_interval(n)
             for group, n in num_worker_threads_per_group.items()
         }
+
+        self.helper_services = helper_services
 
         self._terminate_event = Event()
         super().__init__(**kwargs)
@@ -74,9 +77,11 @@ class TaskkitProcess(Process):
         services = [
             *[ServiceThread(Scheduler(name, backend, entries, self.tzinfo))
               for name, entries in self.schedule_entries.items() if entries],
-            ServiceThread(RestoreAbandonedTasks(backend)),
-            ServiceThread(PurgeDeadWorkers(backend)),
-            ServiceThread(DiscardDisposableTasks(backend)),
+            *([
+                ServiceThread(RestoreAbandonedTasks(backend)),
+                ServiceThread(PurgeDeadWorkers(backend)),
+                ServiceThread(DiscardDisposableTasks(backend)),
+            ] if self.helper_services else []),
         ]
         for service in services:
             service.start()

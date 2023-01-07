@@ -54,19 +54,23 @@ class Kit:
               schedule_entries: ScheduleEntriesCompatMapping = {},
               tzinfo: Optional[tzinfo] = None,
               polling_interval: Union[dict[str, float], float, None] = None,
+              helper_services: bool | Callable[[int], bool] = True,
               should_restart: Callable[[TaskkitProcess], bool] = lambda _: False):
 
         schedule_entries = self._ensure_schedule_entries(schedule_entries)
 
-        def _start():
+        def _start(index: int):
             return self._start_process(
                 num_worker_threads_per_group=num_worker_threads_per_group,
                 schedule_entries=schedule_entries,
                 tzinfo=tzinfo,
                 polling_interval=polling_interval,
+                helper_services=helper_services
+                if isinstance(helper_services, bool)
+                else helper_services(index),
                 daemon=True)
 
-        processes = [_start() for _ in range(num_processes)]
+        processes = [_start(i) for i in range(num_processes)]
 
         try:
             with capture_signals(signal.SIGTERM):
@@ -76,7 +80,7 @@ class Kit:
                             if p.is_active():
                                 p.terminate()
                             p.join()
-                            processes[i] = _start()
+                            processes[i] = _start(i)
                     time.sleep(1)
         except (KeyboardInterrupt, SystemExit, SignalCaptured) as e:
             for p in processes:
@@ -95,6 +99,7 @@ class Kit:
                         schedule_entries: ScheduleEntriesCompatMapping = {},
                         tzinfo: Optional[tzinfo] = None,
                         polling_interval: Union[dict[str, float], float, None] = None,
+                        helper_services: bool | Callable[[int], bool] = True,
                         daemon: bool = True) -> list[TaskkitProcess]:
         schedule_entries = self._ensure_schedule_entries(schedule_entries)
         return [
@@ -102,8 +107,11 @@ class Kit:
                                 schedule_entries,
                                 tzinfo,
                                 polling_interval,
+                                helper_services
+                                if isinstance(helper_services, bool)
+                                else helper_services(i),
                                 daemon)
-            for _ in range(num_processes)
+            for i in range(num_processes)
         ]
 
     def _start_process(self,
@@ -111,6 +119,7 @@ class Kit:
                        schedule_entries: dict[str, list[ScheduleEntry]] = {},
                        tzinfo: Optional[tzinfo] = None,
                        polling_interval: Union[dict[str, float], float, None] = None,
+                       helper_services: bool = True,
                        daemon: bool = True) -> TaskkitProcess:
         p = TaskkitProcess(
             num_worker_threads_per_group=num_worker_threads_per_group,
@@ -120,6 +129,7 @@ class Kit:
             schedule_entries=schedule_entries,
             tzinfo=tzinfo or local_tz(),
             polling_interval=polling_interval,
+            helper_services=helper_services,
             daemon=daemon)
         p.start()
         return p
